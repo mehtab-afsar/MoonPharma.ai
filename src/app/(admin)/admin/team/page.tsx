@@ -150,7 +150,7 @@ export default function AdminTeamPage() {
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Team</h1>
@@ -257,7 +257,7 @@ export default function AdminTeamPage() {
 
       {/* Members Table */}
       {tab === "members" && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
           ) : (
@@ -332,7 +332,7 @@ export default function AdminTeamPage() {
 
       {/* Invitations Table */}
       {tab === "invitations" && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
           ) : invitations.length === 0 ? (

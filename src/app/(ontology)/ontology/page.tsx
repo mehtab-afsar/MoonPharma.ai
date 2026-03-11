@@ -11,7 +11,13 @@ type OntologyEntity = {
   group: string
 }
 
-type OntologyRelationship = { id: string }
+type OntologyRelationship = {
+  id: string
+  displayName: string
+  relationshipType: string
+  sourceEntity: { displayName: string }
+  targetEntity: { displayName: string }
+}
 type OntologyLifecycle = { id: string }
 type OntologyConstraint = { id: string }
 
@@ -47,12 +53,17 @@ export default function OntologyOverviewPage() {
     loadAll()
   }, [])
 
+  const REL_TYPE_LABELS: Record<string, string> = {
+    one_to_one: "1:1",
+    one_to_many: "1:N",
+    many_to_many: "N:N",
+  }
+
   const stats = [
     { label: "Entities", value: entities.length, sub: "Domain objects" },
     { label: "Relationships", value: relationships.length, sub: "Connections" },
     { label: "Lifecycles", value: lifecycles.length, sub: "State machines" },
     { label: "Constraints", value: constraints.length, sub: "Business rules" },
-    { label: "Groups", value: 5, sub: "Entity groups" },
   ]
 
   const sections = [
@@ -108,58 +119,43 @@ export default function OntologyOverviewPage() {
         <p className="text-sm text-gray-500 mt-1">Your pharmaceutical domain model</p>
       </div>
 
-      {/* Stats Row */}
       {loading ? (
         <div className="flex items-center justify-center h-24">
           <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
         </div>
       ) : (
-        <div className="grid grid-cols-5 gap-4">
-          {stats.map((s) => (
-            <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-3xl font-bold text-gray-900">{s.value}</p>
-              <p className="text-sm font-medium text-gray-700 mt-1">{s.label}</p>
-              <p className="text-xs text-gray-400">{s.sub}</p>
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {stats.map((s) => (
+              <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-5">
+                <p className="text-3xl font-bold text-gray-900">{s.value}</p>
+                <p className="text-sm font-medium text-gray-700 mt-1">{s.label}</p>
+                <p className="text-xs text-gray-400">{s.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Relationship Map — real data */}
+          {relationships.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <p className="text-sm font-semibold text-gray-900 mb-4">Relationship Map</p>
+              <div className="flex flex-wrap gap-2">
+                {relationships.map((rel) => (
+                  <div key={rel.id} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
+                    <span className="text-xs font-medium text-gray-700">{rel.sourceEntity.displayName}</span>
+                    <span className="text-xs text-gray-400 font-mono">{REL_TYPE_LABELS[rel.relationshipType] ?? rel.relationshipType}</span>
+                    <span className="text-xs font-medium text-gray-700">{rel.targetEntity.displayName}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
-      {/* Domain Map */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <p className="text-sm font-semibold text-gray-900 mb-5">Domain Map</p>
-        <div className="space-y-4">
-          {/* Row 1 */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Chip label="Product" />
-            <Arrow />
-            <Chip label="MBR" />
-            <Arrow />
-            <Chip label="Batch" />
-            <Arrow />
-            <Chip label="Reviews" />
-          </div>
-          {/* Row 2 */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Chip label="Batch" />
-            <Arrow />
-            <Chip label="Deviations" />
-            <Arrow />
-            <Chip label="CAPA" />
-          </div>
-          {/* Row 3 */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Chip label="Materials" />
-            <span className="text-gray-300 text-xs">+</span>
-            <Chip label="Equipment" />
-            <Arrow />
-            <Chip label="Batch" />
-          </div>
-        </div>
-      </div>
-
       {/* Section Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {sections.map((sec) => (
           <Link
             key={sec.href}
@@ -184,16 +180,4 @@ export default function OntologyOverviewPage() {
       </div>
     </div>
   )
-}
-
-function Chip({ label }: { label: string }) {
-  return (
-    <span className="text-xs font-medium bg-gray-900 text-white px-2.5 py-1 rounded-md">
-      {label}
-    </span>
-  )
-}
-
-function Arrow() {
-  return <span className="text-gray-300 text-sm font-light">→</span>
 }

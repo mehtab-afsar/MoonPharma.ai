@@ -10,9 +10,9 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   if (session.user.role !== "admin") redirect("/dashboard")
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50">
       <PlatformSidebar />
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-y-auto p-8 min-w-0">
         {children}
       </main>
     </div>

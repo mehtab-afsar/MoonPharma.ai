@@ -17,7 +17,6 @@ import {
   ScrollText,
   Bot,
   BarChart3,
-  Settings,
   ArrowLeft,
 } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
@@ -42,7 +41,6 @@ const navItems: NavItem[] = [
   { label: "AI Assistant", href: ROUTES.AI_ASSISTANT, icon: Bot },
   { label: "Reports", href: ROUTES.REPORTS, icon: BarChart3 },
   { label: "Audit Trail", href: ROUTES.AUDIT_TRAIL, icon: ScrollText, roles: ["admin", "qa_head", "qa_reviewer"] },
-  { label: "Settings", href: ROUTES.SETTINGS, icon: Settings, roles: ["admin"] },
 ]
 
 export function AppSidebar() {

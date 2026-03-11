@@ -29,8 +29,8 @@ export async function GET(request: Request) {
         mbr: {
           select: {
             product: { select: { productName: true, id: true } },
-            yieldLowerLimit: true,
-            yieldUpperLimit: true,
+            yieldLimitMin: true,
+            yieldLimitMax: true,
           },
         },
       },
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     const maxYield = Math.max(...yields)
 
     const belowLimitCount = batches.filter((b) => {
-      const limit = Number(b.mbr?.yieldLowerLimit ?? 95)
+      const limit = Number(b.mbr?.yieldLimitMin ?? 95)
       return Number(b.yieldPercentage) < limit
     }).length
 
@@ -126,7 +126,7 @@ export async function GET(request: Request) {
         manufacturingDate: b.manufacturingDate,
         productName: b.mbr?.product?.productName ?? "Unknown",
         status: b.status,
-        yieldLowerLimit: Number(b.mbr?.yieldLowerLimit ?? 95),
+        yieldLimitMin: Number(b.mbr?.yieldLimitMin ?? 95),
       })),
       summary,
       productBreakdown,

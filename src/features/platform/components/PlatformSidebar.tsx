@@ -4,10 +4,11 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useState } from "react"
-import { Users, Shield, Network, AppWindow, CreditCard } from "lucide-react"
+import { LayoutDashboard, Users, Shield, Network, AppWindow, CreditCard } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navItems = [
+  { href: "/platform",              label: "Dashboard",    icon: LayoutDashboard, exact: true },
   { href: "/platform/team",         label: "Team",         icon: Users },
   { href: "/platform/roles",        label: "Roles",        icon: Shield },
   { href: "/platform/subscription", label: "Subscription", icon: CreditCard },
@@ -49,7 +50,7 @@ export function PlatformSidebar() {
       {/* Nav */}
       <nav className={cn("flex-1 overflow-y-auto py-4 space-y-0.5 transition-all duration-200", open ? "px-3" : "px-2")}>
         {navItems.map((item) => {
-          const active = pathname.startsWith(item.href)
+          const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
           return (
             <Link
               key={item.href}

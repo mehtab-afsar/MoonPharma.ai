@@ -197,7 +197,7 @@ export default function YieldAnalyticsPage() {
                 <LineChart data={data.monthlyTrend}>
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={(v) => v.slice(5)} />
                   <YAxis domain={[85, 100]} tick={{ fontSize: 11 }} unit="%" />
-                  <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
+                  <Tooltip formatter={(v: number | undefined) => v != null ? `${v.toFixed(1)}%` : ""} />
                   <ReferenceLine y={95} stroke="#ccc" strokeDasharray="4 4" label={{ value: "95%", position: "right", fontSize: 10 }} />
                   <Line type="monotone" dataKey="avgYield" stroke="#111" strokeWidth={2} dot={{ r: 3 }} name="Avg Yield" />
                 </LineChart>
@@ -220,7 +220,7 @@ export default function YieldAnalyticsPage() {
                 <LineChart data={data.batches}>
                   <XAxis dataKey="batchNumber" tick={{ fontSize: 9 }} />
                   <YAxis domain={[85, 100]} tick={{ fontSize: 11 }} unit="%" />
-                  <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
+                  <Tooltip formatter={(v: number | undefined) => v != null ? `${v.toFixed(1)}%` : ""} />
                   <ReferenceLine y={95} stroke="#ccc" strokeDasharray="4 4" />
                   <Line type="monotone" dataKey="yieldPercentage" stroke="#111" strokeWidth={1.5} dot={{ r: 2 }} name="Yield %" />
                 </LineChart>

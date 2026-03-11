@@ -199,7 +199,7 @@ export default function EntitiesPage() {
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">
                   {GROUP_LABELS[group]} · {groupEntities.length} {groupEntities.length === 1 ? "entity" : "entities"}
                 </p>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {groupEntities.map((entity) => (
                     <EntityCard key={entity.id} entity={entity} />
                   ))}

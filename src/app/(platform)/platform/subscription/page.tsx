@@ -1,21 +1,26 @@
-"use client"
-
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { redirect } from "next/navigation"
+import { prisma } from "@/server/db/prisma"
 import { CreditCard, Users, Package, Activity } from "lucide-react"
 
 const PLANS = {
-  starter: { name: "Starter", maxUsers: 5, maxBatchesPerMonth: 50, maxProducts: 10, price: "Free" },
-  professional: { name: "Professional", maxUsers: 25, maxBatchesPerMonth: 500, maxProducts: 100, price: "$299/mo" },
-  enterprise: { name: "Enterprise", maxUsers: 999, maxBatchesPerMonth: 9999, maxProducts: 9999, price: "Custom" },
+  starter:      { name: "Starter",      maxUsers: 5,   maxBatchesPerMonth: 50,   maxProducts: 10,   price: "Free" },
+  professional: { name: "Professional", maxUsers: 25,  maxBatchesPerMonth: 500,  maxProducts: 100,  price: "$299/mo" },
+  enterprise:   { name: "Enterprise",   maxUsers: 999, maxBatchesPerMonth: 9999, maxProducts: 9999, price: "Custom" },
 }
 
-const CURRENT_USAGE = {
-  plan: "starter" as keyof typeof PLANS,
-  users: 7,
-  batchesThisMonth: 3,
-  products: 4,
-}
-
-function UsageMeter({ label, current, max, icon: Icon }: { label: string; current: number; max: number; icon: React.ComponentType<{ className?: string }> }) {
+function UsageMeter({
+  label,
+  current,
+  max,
+  icon: Icon,
+}: {
+  label: string
+  current: number
+  max: number
+  icon: React.ComponentType<{ className?: string }>
+}) {
   const pct = Math.min((current / max) * 100, 100)
   const isWarning = pct >= 80
   return (
@@ -39,11 +44,30 @@ function UsageMeter({ label, current, max, icon: Icon }: { label: string; curren
   )
 }
 
-export default function PlatformSubscriptionPage() {
-  const plan = PLANS[CURRENT_USAGE.plan]
+export default async function PlatformSubscriptionPage() {
+  const session = await getServerSession(authOptions)
+  if (!session) redirect("/login")
+
+  const orgId = session.user.orgId
+
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  const [org, userCount, batchesThisMonth, productCount] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true, subscriptionPlan: true },
+    }),
+    prisma.user.count({ where: { orgId, isActive: true } }),
+    prisma.batch.count({ where: { orgId, createdAt: { gte: startOfMonth } } }),
+    prisma.product.count({ where: { orgId } }),
+  ])
+
+  const planKey = (org?.subscriptionPlan?.toLowerCase() ?? "starter") as keyof typeof PLANS
+  const plan = PLANS[planKey] ?? PLANS.starter
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-black flex items-center justify-center">
           <CreditCard className="w-4 h-4 text-white" />
@@ -59,6 +83,7 @@ export default function PlatformSubscriptionPage() {
           <div>
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Current Plan</p>
             <h2 className="text-2xl font-bold text-gray-900 mt-0.5">{plan.name}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{org?.name}</p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-gray-900">{plan.price}</p>
@@ -83,12 +108,12 @@ export default function PlatformSubscriptionPage() {
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
         <h3 className="text-sm font-semibold text-gray-900">Current Usage</h3>
-        <UsageMeter label="Team members" current={CURRENT_USAGE.users} max={plan.maxUsers} icon={Users} />
-        <UsageMeter label="Batches this month" current={CURRENT_USAGE.batchesThisMonth} max={plan.maxBatchesPerMonth} icon={Activity} />
-        <UsageMeter label="Products" current={CURRENT_USAGE.products} max={plan.maxProducts} icon={Package} />
+        <UsageMeter label="Team members" current={userCount} max={plan.maxUsers} icon={Users} />
+        <UsageMeter label="Batches this month" current={batchesThisMonth} max={plan.maxBatchesPerMonth} icon={Activity} />
+        <UsageMeter label="Products" current={productCount} max={plan.maxProducts} icon={Package} />
       </div>
 
-      {CURRENT_USAGE.plan !== "enterprise" && (
+      {planKey !== "enterprise" && (
         <div className="bg-black rounded-xl p-6 flex items-center justify-between">
           <div>
             <h3 className="text-white font-semibold">Need more capacity?</h3>

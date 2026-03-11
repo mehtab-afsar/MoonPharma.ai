@@ -30,6 +30,7 @@ export async function GET(request: Request) {
               },
             },
             equipment: { select: { equipmentCode: true, equipmentName: true } },
+            mbrStep: { select: { stepName: true } },
           },
         },
         mbrParameter: { select: { parameterName: true } },
@@ -66,10 +67,10 @@ export async function GET(request: Request) {
     const totalOOS = oosParams.length + oosIPC.length
 
     // Aggregate by step name
-    const stepCounts: Record<string, { oosCount: number; total: number }> = {}
+    const stepCounts: Record<string, { oosCount: number; totalCount: number }> = {}
     for (const p of oosParams) {
       const name = p.batchStep.mbrStep?.stepName ?? `Step ${p.batchStep.stepNumber}`
-      if (!stepCounts[name]) stepCounts[name] = { oosCount: 0, total: 0 }
+      if (!stepCounts[name]) stepCounts[name] = { oosCount: 0, totalCount: 0 }
       stepCounts[name].oosCount++
     }
     // Get total parameter readings per step for rate calc
@@ -85,8 +86,8 @@ export async function GET(request: Request) {
       })
       if (step) {
         const name = step.mbrStep?.stepName ?? `Step ${step.stepNumber}`
-        if (!stepCounts[name]) stepCounts[name] = { oosCount: 0, total: 0 }
-        stepCounts[name].total += a._count.id
+        if (!stepCounts[name]) stepCounts[name] = { oosCount: 0, totalCount: 0 }
+        stepCounts[name].totalCount += a._count.id
       }
     }
 

@@ -24,8 +24,8 @@ export async function calculateBatchRiskScore(batchId: string, orgId: string): P
       },
       mbr: {
         select: {
-          yieldLowerLimit: true,
-          yieldUpperLimit: true,
+          yieldLimitMin: true,
+          yieldLimitMax: true,
         },
       },
     },
@@ -72,7 +72,7 @@ export async function calculateBatchRiskScore(batchId: string, orgId: string): P
   // 3. Yield below limit
   if (batch.yieldPercentage != null) {
     const yieldPct = Number(batch.yieldPercentage)
-    const lowerLimit = batch.mbr?.yieldLowerLimit != null ? Number(batch.mbr.yieldLowerLimit) : 95
+    const lowerLimit = batch.mbr?.yieldLimitMin != null ? Number(batch.mbr.yieldLimitMin) : 95
     if (yieldPct < lowerLimit) {
       const deficit = lowerLimit - yieldPct
       score += Math.min(30, deficit * 5)
