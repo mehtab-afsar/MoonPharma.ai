@@ -1,0 +1,10 @@
+{
+  "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+  "eslint.ignoreUntitled": true,
+  "eslint.rules.customizations": [],
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/src/generated/**": true
+  },
+  "eslint.workingDirectories": [{ "mode": "auto" }]
+}

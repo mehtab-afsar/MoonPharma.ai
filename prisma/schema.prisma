@@ -1,0 +1,1205 @@
+// MoonPharma eBMR — Prisma Schema
+// FDA 21 CFR Part 11 compliant electronic batch manufacturing record system
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  admin
+  production_head
+  supervisor
+  operator
+  qa_reviewer
+  qa_head
+}
+
+enum SubscriptionPlan {
+  starter
+  professional
+  enterprise
+}
+
+enum MaterialType {
+  active
+  excipient
+  packaging
+  consumable
+}
+
+enum PharmacoepialGrade {
+  IP
+  BP
+  USP
+  In_house
+}
+
+enum EquipmentStatus {
+  available
+  in_use
+  maintenance
+  retired
+}
+
+enum MBRStatus {
+  draft
+  pending_review
+  approved
+  effective
+  superseded
+  obsolete
+}
+
+enum BatchStatus {
+  planned
+  in_progress
+  completed
+  under_review
+  approved
+  rejected
+  on_hold
+}
+
+enum BatchStepStatus {
+  pending
+  in_progress
+  completed
+  skipped_with_deviation
+}
+
+enum BatchMaterialStatus {
+  pending
+  dispensed
+  verified
+}
+
+enum DeviationType {
+  planned
+  unplanned
+}
+
+enum DeviationCategory {
+  process
+  equipment
+  material
+  environmental
+}
+
+enum DeviationSeverity {
+  minor
+  major
+  critical
+}
+
+enum DeviationStatus {
+  open
+  under_investigation
+  resolved
+  closed
+}
+
+enum SignatureMeaning {
+  performed
+  verified
+  reviewed
+  approved
+  rejected
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  SIGN
+  LOGIN
+  LOGOUT
+  VIEW
+  EXPORT
+}
+
+enum ReviewType {
+  production_review
+  qa_review
+  qa_head_approval
+}
+
+enum ReviewStatus {
+  pending
+  in_progress
+  approved
+  rejected
+  returned_for_correction
+}
+
+enum ParameterType {
+  numeric
+  text
+  boolean
+  selection
+}
+
+enum CheckType {
+  numeric
+  text
+  pass_fail
+}
+
+enum DosageForm {
+  Tablet
+  Capsule
+  Syrup
+  Injection
+  Cream
+  Ointment
+  Suspension
+  Solution
+  Powder
+  Granules
+}
+
+enum AIInteractionType {
+  batch_review
+  deviation_analysis
+  trend_analysis
+  query
+  chat
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
+enum NumberingReset {
+  yearly
+  monthly
+  never
+}
+
+enum ESignatureMethod {
+  pin_only
+  password_only
+  password_and_pin
+}
+
+// ============================================
+// ORGANIZATION (Multi-tenant SaaS)
+// ============================================
+
+model Organization {
+  id                   String           @id @default(uuid())
+  name                 String
+  licenseNumber        String?          @map("license_number")
+  address              String?
+  gmpCertificateNumber String?          @map("gmp_certificate_number")
+  subscriptionPlan     SubscriptionPlan @default(starter) @map("subscription_plan")
+  isActive             Boolean          @default(true) @map("is_active")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  users              User[]
+  products           Product[]
+  materials          Material[]
+  equipment          Equipment[]
+  masterBatchRecords MasterBatchRecord[]
+  batches            Batch[]
+  deviations         Deviation[]
+  auditTrail         AuditTrail[]
+  aiInteractions     AIInteraction[]
+  invitations        Invitation[]
+  configuration      OrgConfiguration?
+  lookupCategories   LookupCategory[]
+  processTemplates   ProcessTemplate[]
+  stepTemplates      StepTemplate[]
+  ontologyEntities      OntologyEntity[]
+  ontologyAttributes    OntologyAttribute[]
+  ontologyRelationships OntologyRelationship[]
+  processGraphs         ProcessGraph[]
+  ontologyLifecycles    OntologyLifecycle[]
+  ontologyConstraints   OntologyConstraint[]
+
+  @@map("organizations")
+}
+
+// ============================================
+// USERS & ROLES (21 CFR Part 11 compliant)
+// ============================================
+
+model User {
+  id                  String    @id @default(uuid())
+  orgId               String    @map("org_id")
+  employeeId          String    @map("employee_id")
+  fullName            String    @map("full_name")
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  role                UserRole
+  department          String?
+  designation         String?
+  isActive            Boolean   @default(true) @map("is_active")
+  passwordChangedAt   DateTime? @map("password_changed_at")
+  passwordExpiryDays  Int       @default(90) @map("password_expiry_days")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  eSignaturePinHash   String?   @map("e_signature_pin_hash")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  sessions     UserSession[]
+  signatures   ElectronicSignature[]
+  auditEntries AuditTrail[]
+
+  sentInvitations Invitation[] @relation("SentInvitations")
+
+  createdMBRs  MasterBatchRecord[] @relation("MBRCreatedBy")
+  approvedMBRs MasterBatchRecord[] @relation("MBRApprovedBy")
+
+  initiatedBatches   Batch[]
+  dispensedMaterials BatchMaterial[] @relation("DispensingUser")
+  verifiedMaterials  BatchMaterial[] @relation("VerifyingUser")
+  performedSteps     BatchStep[]     @relation("PerformedBy")
+  verifiedSteps      BatchStep[]     @relation("VerifiedBy")
+  checkedIPCs        BatchIPCResult[] @relation("CheckedBy")
+  verifiedIPCs       BatchIPCResult[] @relation("VerifiedIPCBy")
+  raisedDeviations   Deviation[]     @relation("RaisedBy")
+  resolvedDeviations Deviation[]     @relation("ResolvedBy")
+  approvedDeviations Deviation[]     @relation("ApprovedBy")
+  batchReviews       BatchReview[]
+  aiInteractions     AIInteraction[]
+
+  @@unique([orgId, employeeId])
+  @@map("users")
+}
+
+model UserSession {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  tokenHash   String?   @map("token_hash")
+  ipAddress   String?   @map("ip_address")
+  userAgent   String?   @map("user_agent")
+  loggedInAt  DateTime  @default(now()) @map("logged_in_at")
+  loggedOutAt DateTime? @map("logged_out_at")
+  isActive    Boolean   @default(true) @map("is_active")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("user_sessions")
+}
+
+// ============================================
+// PRODUCTS
+// ============================================
+
+model Product {
+  id                 String     @id @default(uuid())
+  orgId              String     @map("org_id")
+  productCode        String     @map("product_code")
+  productName        String     @map("product_name")
+  genericName        String?    @map("generic_name")
+  dosageForm         DosageForm @map("dosage_form")
+  strength           String
+  shelfLifeMonths    Int?       @map("shelf_life_months")
+  storageConditions  String?    @map("storage_conditions")
+  regulatoryCategory String?    @map("regulatory_category")
+  isActive           Boolean    @default(true) @map("is_active")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  organization       Organization        @relation(fields: [orgId], references: [id])
+  masterBatchRecords MasterBatchRecord[]
+
+  @@unique([orgId, productCode])
+  @@map("products")
+}
+
+// ============================================
+// MATERIALS
+// ============================================
+
+model Material {
+  id                 String              @id @default(uuid())
+  orgId              String              @map("org_id")
+  materialCode       String              @map("material_code")
+  materialName       String              @map("material_name")
+  materialType       MaterialType        @map("material_type")
+  unitOfMeasure      String              @map("unit_of_measure")
+  pharmacoepialGrade PharmacoepialGrade? @map("pharmacoepial_grade")
+  isActive           Boolean             @default(true) @map("is_active")
+  createdAt          DateTime            @default(now()) @map("created_at")
+
+  organization   Organization    @relation(fields: [orgId], references: [id])
+  mbrMaterials   MBRMaterial[]
+  batchMaterials BatchMaterial[]
+
+  @@unique([orgId, materialCode])
+  @@map("materials")
+}
+
+// ============================================
+// EQUIPMENT
+// ============================================
+
+model Equipment {
+  id                  String          @id @default(uuid())
+  orgId               String          @map("org_id")
+  equipmentCode       String          @map("equipment_code")
+  equipmentName       String          @map("equipment_name")
+  equipmentType       String          @map("equipment_type")
+  location            String?
+  capacity            String?
+  lastCalibrationDate DateTime?       @map("last_calibration_date") @db.Date
+  nextCalibrationDate DateTime?       @map("next_calibration_date") @db.Date
+  lastCleaningDate    DateTime?       @map("last_cleaning_date")
+  status              EquipmentStatus @default(available)
+  isActive            Boolean         @default(true) @map("is_active")
+  createdAt           DateTime        @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  batchSteps   BatchStep[]
+
+  @@unique([orgId, equipmentCode])
+  @@map("equipment")
+}
+
+// ============================================
+// MASTER BATCH RECORD (MBR) — THE RECIPE
+// ============================================
+
+model MasterBatchRecord {
+  id                    String    @id @default(uuid())
+  orgId                 String    @map("org_id")
+  productId             String    @map("product_id")
+  mbrCode               String    @map("mbr_code")
+  version               Int       @default(1)
+  batchSizeValue        Decimal   @map("batch_size_value") @db.Decimal(12, 3)
+  batchSizeUnit         String    @map("batch_size_unit")
+  theoreticalYieldValue Decimal?  @map("theoretical_yield_value") @db.Decimal(12, 3)
+  theoreticalYieldUnit  String?   @map("theoretical_yield_unit")
+  yieldLimitMin         Decimal   @default(95.00) @map("yield_limit_min") @db.Decimal(5, 2)
+  yieldLimitMax         Decimal   @default(100.00) @map("yield_limit_max") @db.Decimal(5, 2)
+  effectiveDate         DateTime? @map("effective_date") @db.Date
+  reviewDate            DateTime? @map("review_date") @db.Date
+  status                MBRStatus @default(draft)
+  createdById           String    @map("created_by")
+  approvedById          String?   @map("approved_by")
+  approvedAt            DateTime? @map("approved_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
+  createdBy    User         @relation("MBRCreatedBy", fields: [createdById], references: [id])
+  approvedBy   User?        @relation("MBRApprovedBy", fields: [approvedById], references: [id])
+  materials    MBRMaterial[]
+  steps        MBRStep[]
+  batches      Batch[]
+
+  @@unique([orgId, mbrCode, version])
+  @@map("master_batch_records")
+}
+
+model MBRMaterial {
+  id             String  @id @default(uuid())
+  mbrId          String  @map("mbr_id")
+  materialId     String  @map("material_id")
+  quantity       Decimal @db.Decimal(12, 4)
+  unit           String
+  tolerancePlus  Decimal? @map("tolerance_plus") @db.Decimal(5, 2)
+  toleranceMinus Decimal? @map("tolerance_minus") @db.Decimal(5, 2)
+  stage          String?
+  sequenceOrder  Int     @map("sequence_order")
+  isCritical     Boolean @default(false) @map("is_critical")
+  instructions   String?
+
+  mbr            MasterBatchRecord @relation(fields: [mbrId], references: [id], onDelete: Cascade)
+  material       Material          @relation(fields: [materialId], references: [id])
+  batchMaterials BatchMaterial[]
+
+  @@map("mbr_materials")
+}
+
+model MBRStep {
+  id                         String   @id @default(uuid())
+  mbrId                      String   @map("mbr_id")
+  stepNumber                 Int      @map("step_number")
+  stepName                   String   @map("step_name")
+  stage                      String?
+  instructions               String
+  equipmentType              String?  @map("equipment_type")
+  estimatedDurationMinutes   Int?     @map("estimated_duration_minutes")
+  requiresLineClearance      Boolean  @default(false) @map("requires_line_clearance")
+  requiresEnvironmentalCheck Boolean  @default(false) @map("requires_environmental_check")
+  envTempMin                 Decimal? @map("env_temp_min") @db.Decimal(5, 2)
+  envTempMax                 Decimal? @map("env_temp_max") @db.Decimal(5, 2)
+  envHumidityMin             Decimal? @map("env_humidity_min") @db.Decimal(5, 2)
+  envHumidityMax             Decimal? @map("env_humidity_max") @db.Decimal(5, 2)
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  mbr        MasterBatchRecord   @relation(fields: [mbrId], references: [id], onDelete: Cascade)
+  parameters MBRStepParameter[]
+  ipcChecks  MBRInProcessCheck[]
+  batchSteps BatchStep[]
+
+  @@map("mbr_steps")
+}
+
+model MBRStepParameter {
+  id               String        @id @default(uuid())
+  mbrStepId        String        @map("mbr_step_id")
+  parameterName    String        @map("parameter_name")
+  parameterType    ParameterType @map("parameter_type")
+  unit             String?
+  targetValue      String?       @map("target_value")
+  minValue         Decimal?      @map("min_value") @db.Decimal(12, 4)
+  maxValue         Decimal?      @map("max_value") @db.Decimal(12, 4)
+  selectionOptions Json?         @map("selection_options")
+  isCritical       Boolean       @default(false) @map("is_critical")
+  sequenceOrder    Int           @map("sequence_order")
+
+  mbrStep     MBRStep              @relation(fields: [mbrStepId], references: [id], onDelete: Cascade)
+  batchParams BatchStepParameter[]
+
+  @@map("mbr_step_parameters")
+}
+
+model MBRInProcessCheck {
+  id            String    @id @default(uuid())
+  mbrStepId     String    @map("mbr_step_id")
+  checkName     String    @map("check_name")
+  checkType     CheckType @map("check_type")
+  unit          String?
+  specification String?
+  targetValue   Decimal?  @map("target_value") @db.Decimal(12, 4)
+  minValue      Decimal?  @map("min_value") @db.Decimal(12, 4)
+  maxValue      Decimal?  @map("max_value") @db.Decimal(12, 4)
+  frequency     String?
+  sampleSize    String?   @map("sample_size")
+  isCritical    Boolean   @default(false) @map("is_critical")
+  sequenceOrder Int       @map("sequence_order")
+
+  mbrStep    MBRStep         @relation(fields: [mbrStepId], references: [id], onDelete: Cascade)
+  ipcResults BatchIPCResult[]
+
+  @@map("mbr_in_process_checks")
+}
+
+// ============================================
+// BATCH MANUFACTURING RECORD — EXECUTION
+// ============================================
+
+model Batch {
+  id                String      @id @default(uuid())
+  orgId             String      @map("org_id")
+  mbrId             String      @map("mbr_id")
+  batchNumber       String      @unique @map("batch_number")
+  manufacturingDate DateTime    @map("manufacturing_date") @db.Date
+  expiryDate        DateTime?   @map("expiry_date") @db.Date
+  status            BatchStatus @default(planned)
+  currentStepNumber Int         @default(0) @map("current_step_number")
+  startedAt         DateTime?   @map("started_at")
+  completedAt       DateTime?   @map("completed_at")
+  actualYieldValue  Decimal?    @map("actual_yield_value") @db.Decimal(12, 3)
+  actualYieldUnit   String?     @map("actual_yield_unit")
+  yieldPercentage   Decimal?    @map("yield_percentage") @db.Decimal(5, 2)
+  initiatedById     String      @map("initiated_by")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  organization   Organization    @relation(fields: [orgId], references: [id])
+  mbr            MasterBatchRecord @relation(fields: [mbrId], references: [id])
+  initiatedBy    User            @relation(fields: [initiatedById], references: [id])
+  materials      BatchMaterial[]
+  steps          BatchStep[]
+  deviations     Deviation[]
+  reviews        BatchReview[]
+  aiInteractions AIInteraction[]
+
+  @@map("batches")
+}
+
+model BatchMaterial {
+  id                  String              @id @default(uuid())
+  batchId             String              @map("batch_id")
+  mbrMaterialId       String              @map("mbr_material_id")
+  materialId          String              @map("material_id")
+  arNumber            String?             @map("ar_number")
+  supplierBatchNumber String?             @map("supplier_batch_number")
+  requiredQuantity    Decimal             @map("required_quantity") @db.Decimal(12, 4)
+  actualQuantity      Decimal?            @map("actual_quantity") @db.Decimal(12, 4)
+  tareWeight          Decimal?            @map("tare_weight") @db.Decimal(12, 4)
+  grossWeight         Decimal?            @map("gross_weight") @db.Decimal(12, 4)
+  isWithinTolerance   Boolean?            @map("is_within_tolerance")
+  dispensedById       String?             @map("dispensed_by")
+  dispensedAt         DateTime?           @map("dispensed_at")
+  verifiedById        String?             @map("verified_by")
+  verifiedAt          DateTime?           @map("verified_at")
+  status              BatchMaterialStatus @default(pending)
+
+  batch       Batch       @relation(fields: [batchId], references: [id])
+  mbrMaterial MBRMaterial @relation(fields: [mbrMaterialId], references: [id])
+  material    Material    @relation(fields: [materialId], references: [id])
+  dispensedBy User?       @relation("DispensingUser", fields: [dispensedById], references: [id])
+  verifiedBy  User?       @relation("VerifyingUser", fields: [verifiedById], references: [id])
+
+  @@map("batch_materials")
+}
+
+model BatchStep {
+  id                     String          @id @default(uuid())
+  batchId                String          @map("batch_id")
+  mbrStepId              String          @map("mbr_step_id")
+  stepNumber             Int             @map("step_number")
+  stepName               String          @map("step_name")
+  status                 BatchStepStatus @default(pending)
+  equipmentId            String?         @map("equipment_id")
+  equipmentCleanVerified Boolean?        @map("equipment_clean_verified")
+  areaCleanVerified      Boolean?        @map("area_clean_verified")
+  envTemperature         Decimal?        @map("env_temperature") @db.Decimal(5, 2)
+  envHumidity            Decimal?        @map("env_humidity") @db.Decimal(5, 2)
+  startedAt              DateTime?       @map("started_at")
+  completedAt            DateTime?       @map("completed_at")
+  performedById          String?         @map("performed_by")
+  performedAt            DateTime?       @map("performed_at")
+  verifiedById           String?         @map("verified_by")
+  verifiedAt             DateTime?       @map("verified_at")
+  remarks                String?
+
+  batch       Batch      @relation(fields: [batchId], references: [id])
+  mbrStep     MBRStep    @relation(fields: [mbrStepId], references: [id])
+  equipment   Equipment? @relation(fields: [equipmentId], references: [id])
+  performedBy User?      @relation("PerformedBy", fields: [performedById], references: [id])
+  verifiedBy  User?      @relation("VerifiedBy", fields: [verifiedById], references: [id])
+  parameters  BatchStepParameter[]
+  ipcResults  BatchIPCResult[]
+  deviations  Deviation[]
+
+  @@map("batch_steps")
+}
+
+model BatchStepParameter {
+  id                 String   @id @default(uuid())
+  batchStepId        String   @map("batch_step_id")
+  mbrStepParameterId String   @map("mbr_step_parameter_id")
+  parameterName      String   @map("parameter_name")
+  actualValue        String?  @map("actual_value")
+  actualNumericValue Decimal? @map("actual_numeric_value") @db.Decimal(12, 4)
+  isWithinLimit      Boolean? @map("is_within_limit")
+  recordedById       String?  @map("recorded_by")
+  recordedAt         DateTime @default(now()) @map("recorded_at")
+
+  batchStep    BatchStep        @relation(fields: [batchStepId], references: [id])
+  mbrParameter MBRStepParameter @relation(fields: [mbrStepParameterId], references: [id])
+
+  @@map("batch_step_parameters")
+}
+
+model BatchIPCResult {
+  id            String    @id @default(uuid())
+  batchStepId   String    @map("batch_step_id")
+  mbrIpcId      String    @map("mbr_ipc_id")
+  checkName     String    @map("check_name")
+  checkTime     DateTime  @map("check_time")
+  resultValue   String?   @map("result_value")
+  resultNumeric Decimal?  @map("result_numeric") @db.Decimal(12, 4)
+  isWithinSpec  Boolean?  @map("is_within_spec")
+  checkedById   String?   @map("checked_by")
+  verifiedById  String?   @map("verified_by")
+  verifiedAt    DateTime? @map("verified_at")
+  remarks       String?
+
+  batchStep  BatchStep         @relation(fields: [batchStepId], references: [id])
+  mbrIpc     MBRInProcessCheck @relation(fields: [mbrIpcId], references: [id])
+  checkedBy  User?             @relation("CheckedBy", fields: [checkedById], references: [id])
+  verifiedBy User?             @relation("VerifiedIPCBy", fields: [verifiedById], references: [id])
+
+  @@map("batch_ipc_results")
+}
+
+// ============================================
+// DEVIATIONS
+// ============================================
+
+model Deviation {
+  id                String            @id @default(uuid())
+  orgId             String            @map("org_id")
+  batchId           String            @map("batch_id")
+  batchStepId       String?           @map("batch_step_id")
+  deviationNumber   String            @unique @map("deviation_number")
+  deviationType     DeviationType     @map("deviation_type")
+  category          DeviationCategory
+  severity          DeviationSeverity
+  description       String
+  rootCause         String?           @map("root_cause")
+  impactAssessment  String?           @map("impact_assessment")
+  correctiveAction  String?           @map("corrective_action")
+  preventiveAction  String?           @map("preventive_action")
+  status            DeviationStatus   @default(open)
+  raisedById        String            @map("raised_by")
+  raisedAt          DateTime          @default(now()) @map("raised_at")
+  resolvedById      String?           @map("resolved_by")
+  resolvedAt        DateTime?         @map("resolved_at")
+  approvedById      String?           @map("approved_by")
+  approvedAt        DateTime?         @map("approved_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  batch        Batch        @relation(fields: [batchId], references: [id])
+  batchStep    BatchStep?   @relation(fields: [batchStepId], references: [id])
+  raisedBy     User         @relation("RaisedBy", fields: [raisedById], references: [id])
+  resolvedBy   User?        @relation("ResolvedBy", fields: [resolvedById], references: [id])
+  approvedBy   User?        @relation("ApprovedBy", fields: [approvedById], references: [id])
+
+  @@map("deviations")
+}
+
+// ============================================
+// ELECTRONIC SIGNATURES (21 CFR Part 11)
+// ============================================
+
+model ElectronicSignature {
+  id               String          @id @default(uuid())
+  userId           String          @map("user_id")
+  recordType       String          @map("record_type")
+  recordId         String          @map("record_id")
+  signatureMeaning SignatureMeaning @map("signature_meaning")
+  fullName         String          @map("full_name")
+  employeeId       String          @map("employee_id")
+  designation      String?
+  signedAt         DateTime        @default(now()) @map("signed_at")
+  ipAddress        String?         @map("ip_address")
+  userAgent        String?         @map("user_agent")
+  signatureHash    String?         @map("signature_hash")
+  isValid          Boolean         @default(true) @map("is_valid")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("electronic_signatures")
+}
+
+// ============================================
+// AUDIT TRAIL (IMMUTABLE — APPEND ONLY!)
+// ============================================
+
+model AuditTrail {
+  id              BigInt      @id @default(autoincrement())
+  orgId           String?     @map("org_id")
+  userId          String?     @map("user_id")
+  userName        String?     @map("user_name")
+  userRole        String?     @map("user_role")
+  action          AuditAction
+  tableName       String      @map("table_name")
+  recordId        String      @map("record_id")
+  fieldName       String?     @map("field_name")
+  oldValue        String?     @map("old_value")
+  newValue        String?     @map("new_value")
+  reasonForChange String?     @map("reason_for_change")
+  ipAddress       String?     @map("ip_address")
+  userAgent       String?     @map("user_agent")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id])
+
+  // IMPORTANT: No UPDATE or DELETE permissions on this table in production!
+  @@map("audit_trail")
+}
+
+// ============================================
+// BATCH REVIEW & RELEASE
+// ============================================
+
+model BatchReview {
+  id              String       @id @default(uuid())
+  batchId         String       @map("batch_id")
+  reviewType      ReviewType   @map("review_type")
+  reviewerId      String       @map("reviewer_id")
+  status          ReviewStatus @default(pending)
+  checklist       Json?
+  comments        String?
+  aiReviewSummary String?      @map("ai_review_summary")
+  aiFlaggedIssues Json?        @map("ai_flagged_issues")
+  startedAt       DateTime?    @map("started_at")
+  completedAt     DateTime?    @map("completed_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  batch    Batch @relation(fields: [batchId], references: [id])
+  reviewer User  @relation(fields: [reviewerId], references: [id])
+
+  @@map("batch_reviews")
+}
+
+// ============================================
+// AI INTERACTIONS LOG
+// ============================================
+
+model AIInteraction {
+  id              String            @id @default(uuid())
+  orgId           String?           @map("org_id")
+  userId          String?           @map("user_id")
+  batchId         String?           @map("batch_id")
+  interactionType AIInteractionType @map("interaction_type")
+  prompt          String?
+  response        String?
+  modelUsed       String?           @map("model_used")
+  tokensUsed      Int?              @map("tokens_used")
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id])
+  batch        Batch?        @relation(fields: [batchId], references: [id])
+
+  @@map("ai_interactions")
+}
+
+// ============================================
+// INVITATIONS
+// ============================================
+
+model Invitation {
+  id          String           @id @default(uuid())
+  orgId       String           @map("org_id")
+  email       String
+  fullName    String           @map("full_name")
+  employeeId  String           @map("employee_id")
+  role        UserRole
+  department  String?
+  token       String           @unique
+  status      InvitationStatus @default(pending)
+  expiresAt   DateTime         @map("expires_at")
+  invitedById String           @map("invited_by_id")
+  acceptedAt  DateTime?        @map("accepted_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  org       Organization @relation(fields: [orgId], references: [id])
+  invitedBy User         @relation("SentInvitations", fields: [invitedById], references: [id])
+
+  @@map("invitations")
+}
+
+// ============================================
+// ORG CONFIGURATION (Ontology / Workflow)
+// ============================================
+
+model OrgConfiguration {
+  id                       String           @id @default(uuid())
+  orgId                    String           @unique @map("org_id")
+
+  // Numbering
+  batchPrefix              String           @default("B") @map("batch_prefix")
+  batchNumberReset         NumberingReset   @default(yearly) @map("batch_number_reset")
+  deviationPrefix          String           @default("DEV") @map("deviation_prefix")
+  changeControlPrefix      String           @default("CC") @map("change_control_prefix")
+
+  // Workflow rules
+  qaReviewStages           Int              @default(2) @map("qa_review_stages")
+  requireLineClearance     Boolean          @default(true) @map("require_line_clearance")
+  autoDeviationOnOos       Boolean          @default(true) @map("auto_deviation_on_oos")
+  criticalDeviationHold    Boolean          @default(true) @map("critical_deviation_hold")
+
+  // E-signature
+  eSignatureMethod         ESignatureMethod @default(pin_only) @map("e_signature_method")
+  sessionTimeoutMinutes    Int              @default(480) @map("session_timeout_minutes")
+  failedLoginLockout       Int              @default(5) @map("failed_login_lockout")
+
+  // Default specifications
+  defaultYieldMin          Float            @default(95.0) @map("default_yield_min")
+  defaultYieldMax          Float            @default(102.0) @map("default_yield_max")
+  defaultMaterialTolerance Float            @default(2.0) @map("default_material_tolerance")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@map("org_configurations")
+}
+
+// ============================================
+// LOOKUP CATEGORIES (Ontology — configurable enums)
+// ============================================
+
+model LookupCategory {
+  id           String   @id @default(uuid())
+  orgId        String   @map("org_id")
+  categoryType String   @map("category_type")
+  value        String
+  label        String
+  isSystem     Boolean  @default(false) @map("is_system")
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, categoryType, value])
+  @@map("lookup_categories")
+}
+
+// ============================================
+// PROCESS TEMPLATES (reusable MBR step library)
+// ============================================
+
+model ProcessTemplate {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  code        String
+  name        String
+  description String?
+  category    String   @default("manufacturing")
+  isSystem    Boolean  @default(false) @map("is_system")
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  org   Organization   @relation(fields: [orgId], references: [id])
+  steps StepTemplate[]
+
+  @@unique([orgId, code])
+  @@map("process_templates")
+}
+
+model StepTemplate {
+  id                       String   @id @default(uuid())
+  processTemplateId        String   @map("process_template_id")
+  orgId                    String   @map("org_id")
+  stepNumber               Int      @map("step_number")
+  stepName                 String   @map("step_name")
+  stage                    String?
+  instructions             String
+  equipmentType            String?  @map("equipment_type")
+  estimatedDurationMinutes Int?     @map("estimated_duration_minutes")
+  requiresLineClearance    Boolean  @default(false) @map("requires_line_clearance")
+  requiresEnvironmentalCheck Boolean @default(false) @map("requires_environmental_check")
+  envTempMin               Decimal? @map("env_temp_min") @db.Decimal(5, 2)
+  envTempMax               Decimal? @map("env_temp_max") @db.Decimal(5, 2)
+  envHumidityMin           Decimal? @map("env_humidity_min") @db.Decimal(5, 2)
+  envHumidityMax           Decimal? @map("env_humidity_max") @db.Decimal(5, 2)
+  sortOrder                Int      @default(0) @map("sort_order")
+
+  processTemplate ProcessTemplate      @relation(fields: [processTemplateId], references: [id], onDelete: Cascade)
+  org             Organization         @relation(fields: [orgId], references: [id])
+  parameters      ParameterTemplate[]
+  ipcChecks       IPCTemplate[]
+
+  @@map("step_templates")
+}
+
+model ParameterTemplate {
+  id               String        @id @default(uuid())
+  stepTemplateId   String        @map("step_template_id")
+  parameterName    String        @map("parameter_name")
+  parameterType    ParameterType @map("parameter_type")
+  unit             String?
+  targetValue      String?       @map("target_value")
+  minValue         Decimal?      @map("min_value") @db.Decimal(12, 4)
+  maxValue         Decimal?      @map("max_value") @db.Decimal(12, 4)
+  selectionOptions Json?         @map("selection_options")
+  isCritical       Boolean       @default(false) @map("is_critical")
+  sequenceOrder    Int           @map("sequence_order")
+
+  stepTemplate StepTemplate @relation(fields: [stepTemplateId], references: [id], onDelete: Cascade)
+
+  @@map("parameter_templates")
+}
+
+model IPCTemplate {
+  id            String    @id @default(uuid())
+  stepTemplateId String   @map("step_template_id")
+  checkName     String    @map("check_name")
+  checkType     CheckType @map("check_type")
+  unit          String?
+  specification String?
+  targetValue   Decimal?  @map("target_value") @db.Decimal(12, 4)
+  minValue      Decimal?  @map("min_value") @db.Decimal(12, 4)
+  maxValue      Decimal?  @map("max_value") @db.Decimal(12, 4)
+  frequency     String?
+  sampleSize    String?   @map("sample_size")
+  isCritical    Boolean   @default(false) @map("is_critical")
+  sequenceOrder Int       @map("sequence_order")
+
+  stepTemplate StepTemplate @relation(fields: [stepTemplateId], references: [id], onDelete: Cascade)
+
+  @@map("ipc_templates")
+}
+
+// ============================================
+// ONTOLOGY
+// ============================================
+
+enum AttributeDataType {
+  text
+  number
+  boolean
+  date
+  datetime
+  select
+  multiselect
+  reference
+  textarea
+  computed
+  email
+  url
+  file
+}
+
+enum RelationshipType {
+  one_to_one
+  one_to_many
+  many_to_many
+}
+
+enum ProcessNodeType {
+  start
+  end
+  step
+  decision
+  entity
+  document
+}
+
+model OntologyEntity {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  name        String
+  displayName String   @map("display_name")
+  description String?
+  icon        String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  isActive    Boolean  @default(true)  @map("is_active")
+  sortOrder   Int      @default(0)     @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  group           String   @default("master_data") @map("group")
+  pluralLabel     String   @default("") @map("plural_label")
+  color           String?  @map("color")
+  prismaModel     String?  @map("prisma_model")
+  appRoute        String?  @map("app_route")
+  parentEntityId  String?  @map("parent_entity_id")
+  isAuditable     Boolean  @default(true)  @map("is_auditable")
+  isSoftDelete    Boolean  @default(true)  @map("is_soft_delete")
+  isVersioned     Boolean  @default(false) @map("is_versioned")
+  requiresApproval Boolean @default(false) @map("requires_approval")
+  hasLifecycle    Boolean  @default(false) @map("has_lifecycle")
+
+  org           Organization           @relation(fields: [orgId], references: [id])
+  attributes    OntologyAttribute[]
+  asSource      OntologyRelationship[] @relation("RelSource")
+  asTarget      OntologyRelationship[] @relation("RelTarget")
+  lifecycles    OntologyLifecycle[]
+  constraints   OntologyConstraint[]
+  parentEntity  OntologyEntity?  @relation("EntityHierarchy", fields: [parentEntityId], references: [id])
+  childEntities OntologyEntity[] @relation("EntityHierarchy")
+  referencedByAttributes OntologyAttribute[] @relation("AttributeReference")
+
+  @@unique([orgId, name])
+  @@map("ontology_entities")
+}
+
+model OntologyAttribute {
+  id          String            @id @default(uuid())
+  entityId    String            @map("entity_id")
+  orgId       String            @map("org_id")
+  name        String
+  displayName String            @map("display_name")
+  dataType    AttributeDataType @map("data_type")
+  description String?
+  isRequired  Boolean           @default(false) @map("is_required")
+  isSystem    Boolean           @default(false) @map("is_system")
+  enumOptions Json?             @map("enum_options")
+  sortOrder   Int               @default(0)     @map("sort_order")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  section              String?  @map("section")
+  sectionOrder         Int      @default(0) @map("section_order")
+  helpText             String?  @map("help_text")
+  isUnique             Boolean  @default(false) @map("is_unique")
+  minValue             Decimal? @map("min_value") @db.Decimal(12,4)
+  maxValue             Decimal? @map("max_value") @db.Decimal(12,4)
+  minLength            Int?     @map("min_length")
+  maxLength            Int?     @map("max_length")
+  pattern              String?  @map("pattern")
+  patternMessage       String?  @map("pattern_message")
+  unit                 String?  @map("unit")
+  defaultValue         String?  @map("default_value")
+  isSearchable         Boolean  @default(false) @map("is_searchable")
+  isFilterable         Boolean  @default(false) @map("is_filterable")
+  isShownInList        Boolean  @default(true)  @map("is_shown_in_list")
+  isShownInDetail      Boolean  @default(true)  @map("is_shown_in_detail")
+  isEditableAfterCreate Boolean @default(true)  @map("is_editable_after_create")
+  isCritical           Boolean  @default(false) @map("is_critical")
+  prismaField          String?  @map("prisma_field")
+  referenceEntityId    String?  @map("reference_entity_id")
+  formula              String?  @map("formula")
+
+  entity OntologyEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  org    Organization   @relation(fields: [orgId], references: [id])
+  referenceEntity OntologyEntity? @relation("AttributeReference", fields: [referenceEntityId], references: [id])
+
+  @@unique([entityId, name])
+  @@map("ontology_attributes")
+}
+
+model OntologyRelationship {
+  id               String           @id @default(uuid())
+  orgId            String           @map("org_id")
+  sourceEntityId   String           @map("source_entity_id")
+  targetEntityId   String           @map("target_entity_id")
+  name             String
+  displayName      String           @map("display_name")
+  relationshipType RelationshipType @map("relationship_type")
+  isSystem         Boolean          @default(false) @map("is_system")
+  description      String?
+  createdAt        DateTime         @default(now()) @map("created_at")
+  forwardLabel    String   @default("") @map("forward_label")
+  reverseLabel    String   @default("") @map("reverse_label")
+  isRequired      Boolean  @default(false) @map("is_required")
+  minCount        Int?     @map("min_count")
+  maxCount        Int?     @map("max_count")
+  cascadeDelete   Boolean  @default(false) @map("cascade_delete")
+  hasBridgeEntity Boolean  @default(false) @map("has_bridge_entity")
+  prismaRelation  String?  @map("prisma_relation")
+
+  org          Organization   @relation(fields: [orgId], references: [id])
+  sourceEntity OntologyEntity @relation("RelSource", fields: [sourceEntityId], references: [id])
+  targetEntity OntologyEntity @relation("RelTarget", fields: [targetEntityId], references: [id])
+
+  @@unique([orgId, sourceEntityId, targetEntityId, name])
+  @@map("ontology_relationships")
+}
+
+model OntologyLifecycle {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  entityId    String   @map("entity_id")
+  name        String
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  org         Organization           @relation(fields: [orgId], references: [id])
+  entity      OntologyEntity         @relation(fields: [entityId], references: [id])
+  states      OntologyLifecycleState[]
+  transitions OntologyLifecycleTransition[]
+
+  @@unique([orgId, entityId])
+  @@map("ontology_lifecycles")
+}
+
+model OntologyLifecycleState {
+  id          String  @id @default(uuid())
+  lifecycleId String  @map("lifecycle_id")
+  code        String
+  label       String
+  description String?
+  color       String?
+  isInitial   Boolean @default(false) @map("is_initial")
+  isTerminal  Boolean @default(false) @map("is_terminal")
+  sortOrder   Int     @default(0)     @map("sort_order")
+
+  lifecycle       OntologyLifecycle            @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
+  fromTransitions OntologyLifecycleTransition[] @relation("FromState")
+  toTransitions   OntologyLifecycleTransition[] @relation("ToState")
+
+  @@unique([lifecycleId, code])
+  @@map("ontology_lifecycle_states")
+}
+
+model OntologyLifecycleTransition {
+  id                String   @id @default(uuid())
+  lifecycleId       String   @map("lifecycle_id")
+  fromStateId       String   @map("from_state_id")
+  toStateId         String   @map("to_state_id")
+  action            String
+  label             String
+  requiredRoles     String[] @map("required_roles")
+  requiresSignature Boolean  @default(false) @map("requires_signature")
+  requiresComment   Boolean  @default(false) @map("requires_comment")
+  isSystem          Boolean  @default(false) @map("is_system")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  lifecycle OntologyLifecycle      @relation(fields: [lifecycleId], references: [id], onDelete: Cascade)
+  fromState OntologyLifecycleState @relation("FromState", fields: [fromStateId], references: [id])
+  toState   OntologyLifecycleState @relation("ToState",   fields: [toStateId],   references: [id])
+
+  @@map("ontology_lifecycle_transitions")
+}
+
+model OntologyConstraint {
+  id             String   @id @default(uuid())
+  orgId          String   @map("org_id")
+  entityId       String   @map("entity_id")
+  code           String
+  name           String
+  description    String?
+  constraintType String   @map("constraint_type")
+  rule           Json
+  severity       String   @default("error")
+  errorMessage   String   @map("error_message")
+  isSystem       Boolean  @default(false) @map("is_system")
+  isActive       Boolean  @default(true)  @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  org    Organization   @relation(fields: [orgId], references: [id])
+  entity OntologyEntity @relation(fields: [entityId], references: [id])
+
+  @@unique([orgId, entityId, code])
+  @@map("ontology_constraints")
+}
+
+model ProcessGraph {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  name        String
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  org   Organization       @relation(fields: [orgId], references: [id])
+  nodes ProcessGraphNode[]
+  edges ProcessGraphEdge[]
+
+  @@map("process_graphs")
+}
+
+model ProcessGraphNode {
+  id       String          @id @default(uuid())
+  graphId  String          @map("graph_id")
+  orgId    String          @map("org_id")
+  label    String
+  nodeType ProcessNodeType @map("node_type")
+  entityId String?         @map("entity_id")
+  posX     Float           @map("pos_x")
+  posY     Float           @map("pos_y")
+  config   Json?
+
+  graph         ProcessGraph       @relation(fields: [graphId], references: [id], onDelete: Cascade)
+  outgoingEdges ProcessGraphEdge[] @relation("EdgeSource")
+  incomingEdges ProcessGraphEdge[] @relation("EdgeTarget")
+
+  @@map("process_graph_nodes")
+}
+
+model ProcessGraphEdge {
+  id           String  @id @default(uuid())
+  graphId      String  @map("graph_id")
+  sourceNodeId String  @map("source_node_id")
+  targetNodeId String  @map("target_node_id")
+  label        String?
+  condition    String?
+
+  graph      ProcessGraph     @relation(fields: [graphId], references: [id], onDelete: Cascade)
+  sourceNode ProcessGraphNode @relation("EdgeSource", fields: [sourceNodeId], references: [id])
+  targetNode ProcessGraphNode @relation("EdgeTarget", fields: [targetNodeId], references: [id])
+
+  @@map("process_graph_edges")
+}
