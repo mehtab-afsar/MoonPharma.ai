@@ -354,7 +354,6 @@ export default function BatchReviewDetailPage() {
         setAiError(json.message ?? "Failed to generate AI summary")
         return
       }
-      const json = await res2.json()
       if (json.data?.flaggedItems) setAiFlaggedItems(json.data.flaggedItems)
       if (json.data?.riskLevel) setAiRiskLevel(json.data.riskLevel)
       if (json.data?.approvalRecommendation) setAiRecommendation(json.data.approvalRecommendation)
@@ -563,6 +562,70 @@ export default function BatchReviewDetailPage() {
       )}
 
       <Separator />
+
+      {/* AI Risk Flags Panel */}
+      {aiFlaggedItems.length > 0 && (
+        <Card className="border border-gray-300 shadow-sm bg-gray-50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 text-gray-700" />
+              <CardTitle className="text-sm font-semibold text-gray-900">
+                AI Risk Flags
+              </CardTitle>
+              {aiRiskLevel && (
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ml-1 ${
+                    aiRiskLevel === "high"
+                      ? "bg-gray-800 text-white"
+                      : aiRiskLevel === "medium"
+                      ? "bg-gray-300 text-gray-800"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {aiRiskLevel} risk
+                </span>
+              )}
+              {aiRecommendation && (
+                <span
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded border ml-1 ${
+                    aiRecommendation === "approve"
+                      ? "border-gray-300 text-gray-600"
+                      : aiRecommendation === "reject"
+                      ? "bg-gray-800 text-white border-gray-800"
+                      : "border-gray-400 text-gray-700"
+                  }`}
+                >
+                  <Sparkles className="inline h-2.5 w-2.5 mr-1" />
+                  AI suggests: {aiRecommendation}
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {aiFlaggedItems.map((item, i) => (
+                <div key={i} className="flex items-start gap-2.5 text-sm border border-gray-200 rounded-lg p-2.5 bg-white">
+                  <span
+                    className={`mt-0.5 shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                      item.severity === "critical"
+                        ? "bg-gray-800 text-white"
+                        : item.severity === "major"
+                        ? "bg-gray-300 text-gray-800"
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {item.severity}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-800">{item.label}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{item.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* AI Summary Section */}
       <Card className="border border-gray-200 shadow-sm">
