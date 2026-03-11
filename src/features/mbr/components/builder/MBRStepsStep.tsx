@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
-  Plus, Trash2, Loader2, ChevronLeft, ListOrdered, ChevronDown, ChevronUp, Download,
+  Plus, Trash2, Loader2, ChevronLeft, ListOrdered, ChevronDown, ChevronUp, Download, Sparkles,
 } from "lucide-react"
 import { MANUFACTURING_STAGES, PARAMETER_TYPES } from "@/shared/constants/pharma.constants"
 
@@ -388,6 +388,19 @@ export function MBRStepsStep({ mbrId, onComplete, onBack }: Props) {
   const [showImportModal, setShowImportModal] = useState(false)
   const [templates, setTemplates] = useState<ProcessTemplate[]>([])
   const [importingTemplateId, setImportingTemplateId] = useState<string | null>(null)
+  const [showAIGenerator, setShowAIGenerator] = useState(false)
+  const [aiDescription, setAIDescription] = useState("")
+  const [aiGenerating, setAIGenerating] = useState(false)
+  const [aiGeneratedStep, setAIGeneratedStep] = useState<null | {
+    stepName: string; stage?: string; instructions: string; equipmentType?: string
+    estimatedDurationMinutes?: number; requiresLineClearance: boolean
+    requiresEnvironmentalCheck: boolean; envTempMin?: number; envTempMax?: number
+    envHumidityMin?: number; envHumidityMax?: number
+    parameters: Array<{ parameterName: string; parameterType: string; unit?: string; targetValue?: string; minValue?: number; maxValue?: number; isCritical: boolean; sequenceOrder: number }>
+    ipcChecks: Array<{ checkName: string; checkType: string; unit?: string; specification?: string; targetValue?: number; minValue?: number; maxValue?: number; frequency?: string; sampleSize?: string; isCritical: boolean; sequenceOrder: number }>
+    rationale: string
+  }>(null)
+  const [applyingAIStep, setApplyingAIStep] = useState(false)
 
   function toggleStep(stepId: string) {
     setExpandedSteps((prev) => {
@@ -494,6 +507,58 @@ export function MBRStepsStep({ mbrId, onComplete, onBack }: Props) {
     } finally {
       setImportingTemplateId(null)
     }
+  }
+
+  async function handleAIGenerate() {
+    if (!aiDescription.trim()) { toast.error("Please describe the step first"); return }
+    setAIGenerating(true)
+    setAIGeneratedStep(null)
+    try {
+      const res = await fetch(`/api/mbr/${mbrId}/steps/ai-generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: aiDescription, existingStepCount: steps.length }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.message ?? "AI generation failed"); return }
+      setAIGeneratedStep(json.data.step)
+    } catch { toast.error("Failed to generate step") }
+    finally { setAIGenerating(false) }
+  }
+
+  async function handleApplyAIStep() {
+    if (!aiGeneratedStep) return
+    setApplyingAIStep(true)
+    try {
+      const res = await fetch(`/api/mbr/${mbrId}/steps`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stepNumber: steps.length + 1,
+          stepName: aiGeneratedStep.stepName,
+          stage: aiGeneratedStep.stage,
+          instructions: aiGeneratedStep.instructions,
+          equipmentType: aiGeneratedStep.equipmentType,
+          estimatedDurationMinutes: aiGeneratedStep.estimatedDurationMinutes,
+          requiresLineClearance: aiGeneratedStep.requiresLineClearance,
+          requiresEnvironmentalCheck: aiGeneratedStep.requiresEnvironmentalCheck,
+          envTempMin: aiGeneratedStep.envTempMin,
+          envTempMax: aiGeneratedStep.envTempMax,
+          envHumidityMin: aiGeneratedStep.envHumidityMin,
+          envHumidityMax: aiGeneratedStep.envHumidityMax,
+          parameters: aiGeneratedStep.parameters,
+          ipcChecks: aiGeneratedStep.ipcChecks,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.message ?? "Failed to add step"); return }
+      setSteps((prev) => [...prev, json.data])
+      toast.success(`Step "${aiGeneratedStep.stepName}" added from AI suggestion`)
+      setShowAIGenerator(false)
+      setAIDescription("")
+      setAIGeneratedStep(null)
+    } catch { toast.error("Unexpected error") }
+    finally { setApplyingAIStep(false) }
   }
 
   async function onAddStep(values: StepFormValues) {
@@ -610,6 +675,7 @@ export function MBRStepsStep({ mbrId, onComplete, onBack }: Props) {
                   loadTemplates()
                   setShowImportModal(true)
                   setShowAddStep(false)
+                  setShowAIGenerator(false)
                 }}
               >
                 <Download className="h-3.5 w-3.5" />
@@ -618,8 +684,25 @@ export function MBRStepsStep({ mbrId, onComplete, onBack }: Props) {
               <Button
                 size="sm"
                 variant="outline"
+                className="gap-1.5 border-gray-300"
+                onClick={() => {
+                  setShowAIGenerator((v) => !v)
+                  setShowAddStep(false)
+                  setShowImportModal(false)
+                  setAIGeneratedStep(null)
+                }}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Generate with AI
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 className="gap-1.5"
-                onClick={() => setShowAddStep((v) => !v)}
+                onClick={() => {
+                  setShowAddStep((v) => !v)
+                  setShowAIGenerator(false)
+                }}
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add Step
@@ -627,6 +710,139 @@ export function MBRStepsStep({ mbrId, onComplete, onBack }: Props) {
             </div>
           </div>
         </CardHeader>
+
+        {/* AI Step Generator */}
+        {showAIGenerator && (
+          <>
+            <Separator />
+            <CardContent className="pt-4">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-gray-700" />
+                    <p className="text-xs font-semibold text-gray-800">Generate Step with AI</p>
+                    <span className="text-[10px] font-medium text-gray-500 border border-gray-300 rounded-full px-2 py-0.5">
+                      Review before adding
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAIGenerator(false); setAIGeneratedStep(null) }}
+                    className="text-gray-400 hover:text-gray-700 text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-700">Describe this manufacturing step in plain English</Label>
+                  <Textarea
+                    rows={3}
+                    placeholder="e.g. Wet granulation using water as granulation fluid — mix dry blend in RMG for 5 minutes, then add water slowly over 10 minutes while mixing at 500 rpm, granulate until endpoint"
+                    className="text-sm resize-none bg-white"
+                    value={aiDescription}
+                    onChange={(e) => setAIDescription(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-black text-white hover:bg-gray-800"
+                    onClick={handleAIGenerate}
+                    disabled={aiGenerating || !aiDescription.trim()}
+                  >
+                    {aiGenerating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {aiGenerating ? "Generating…" : "Generate Step"}
+                  </Button>
+                </div>
+
+                {/* AI Result Preview */}
+                {aiGeneratedStep && (
+                  <div className="mt-2 space-y-4 rounded-lg border border-gray-200 bg-white p-4">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Step Name</p>
+                      <p className="text-sm font-semibold text-gray-900">{aiGeneratedStep.stepName}</p>
+                      {aiGeneratedStep.stage && (
+                        <p className="text-xs text-gray-500 mt-0.5">Stage: {aiGeneratedStep.stage}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Instructions</p>
+                      <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{aiGeneratedStep.instructions}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                      {aiGeneratedStep.equipmentType && <span>Equipment: <span className="text-gray-800">{aiGeneratedStep.equipmentType}</span></span>}
+                      {aiGeneratedStep.estimatedDurationMinutes && <span>Duration: <span className="text-gray-800">{aiGeneratedStep.estimatedDurationMinutes} min</span></span>}
+                      {aiGeneratedStep.requiresLineClearance && <span className="text-gray-700">· Line clearance required</span>}
+                      {aiGeneratedStep.requiresEnvironmentalCheck && (
+                        <span className="text-gray-700">· Env: {aiGeneratedStep.envTempMin}–{aiGeneratedStep.envTempMax}°C, {aiGeneratedStep.envHumidityMin}–{aiGeneratedStep.envHumidityMax}% RH</span>
+                      )}
+                    </div>
+                    {aiGeneratedStep.parameters.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-1">Parameters ({aiGeneratedStep.parameters.length})</p>
+                        <div className="space-y-1">
+                          {aiGeneratedStep.parameters.map((p, i) => (
+                            <div key={i} className="flex items-center gap-2 rounded bg-gray-50 px-2.5 py-1.5 text-xs">
+                              <span className="font-medium text-gray-800">{p.parameterName}</span>
+                              {p.unit && <span className="text-gray-400">{p.unit}</span>}
+                              {p.minValue != null && p.maxValue != null && (
+                                <span className="text-gray-500">{p.minValue}–{p.maxValue}</span>
+                              )}
+                              {p.isCritical && <span className="text-[10px] font-bold bg-orange-100 text-orange-600 rounded px-1">Critical</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {aiGeneratedStep.ipcChecks.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-1">IPC Checks ({aiGeneratedStep.ipcChecks.length})</p>
+                        <div className="space-y-1">
+                          {aiGeneratedStep.ipcChecks.map((c, i) => (
+                            <div key={i} className="flex items-center gap-2 rounded bg-green-50/60 px-2.5 py-1.5 text-xs">
+                              <span className="font-medium text-gray-800">{c.checkName}</span>
+                              {c.specification && <span className="text-gray-500">{c.specification}</span>}
+                              {c.frequency && <span className="text-gray-400">{c.frequency}</span>}
+                              {c.isCritical && <span className="text-[10px] font-bold bg-orange-100 text-orange-600 rounded px-1">Critical</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {aiGeneratedStep.rationale && (
+                      <p className="text-xs text-gray-500 italic border-t border-gray-100 pt-2">{aiGeneratedStep.rationale}</p>
+                    )}
+                    <div className="flex gap-2 justify-end border-t border-gray-100 pt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => { setAIGeneratedStep(null); setAIDescription("") }}
+                      >
+                        Regenerate
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1 bg-black text-white hover:bg-gray-800"
+                        onClick={handleApplyAIStep}
+                        disabled={applyingAIStep}
+                      >
+                        {applyingAIStep && <Loader2 className="h-3 w-3 animate-spin" />}
+                        Add This Step
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </>
+        )}
 
         {/* Import from Template modal */}
         {showImportModal && (
