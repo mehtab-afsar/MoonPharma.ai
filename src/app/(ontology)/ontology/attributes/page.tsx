@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, Fragment } from "react"
 import { toast } from "sonner"
 import { Loader2, Shield, Pencil, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -158,8 +158,8 @@ export default function AttributesPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {attributes.map((attr) => (
-                <>
-                  <tr key={attr.id} className="hover:bg-gray-50">
+                <Fragment key={attr.id}>
+                  <tr className="hover:bg-gray-50">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-gray-900">{attr.displayName}</span>
@@ -245,7 +245,7 @@ export default function AttributesPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
