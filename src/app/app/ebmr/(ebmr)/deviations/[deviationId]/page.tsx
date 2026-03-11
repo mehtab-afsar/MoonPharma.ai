@@ -18,6 +18,8 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Copy,
+  FileText,
   FlaskConical,
   Loader2,
   Search,
@@ -178,6 +180,9 @@ export default function DeviationDetailPage() {
   const [aiSuggestion, setAiSuggestion] = useState<AISuggestion | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiExpanded, setAiExpanded] = useState(true)
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportContent, setReportContent] = useState<string | null>(null)
+  const [reportCopied, setReportCopied] = useState(false)
 
   const { data: deviation, isLoading } = useQuery<DeviationDetail>({
     queryKey: ["deviation", deviationId],
@@ -246,6 +251,28 @@ export default function DeviationDetailPage() {
     } finally {
       setAiLoading(false)
     }
+  }
+
+  const handleGenerateReport = async () => {
+    setReportLoading(true)
+    try {
+      const res = await fetch(`/api/deviations/${deviationId}/generate-report`, { method: "POST" })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.message ?? "Report generation failed")
+      setReportContent(json.data.report)
+      toast.success("Investigation report generated")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate report")
+    } finally {
+      setReportLoading(false)
+    }
+  }
+
+  const handleCopyReport = () => {
+    if (!reportContent) return
+    navigator.clipboard.writeText(reportContent)
+    setReportCopied(true)
+    setTimeout(() => setReportCopied(false), 2000)
   }
 
   const applyAISuggestion = (capa: { corrective: string; preventive: string }) => {
@@ -349,6 +376,21 @@ export default function DeviationDetailPage() {
               AI Suggest RCA
             </Button>
           )}
+          {/* Generate Report button — available on closed/resolved deviations too */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-50"
+            onClick={handleGenerateReport}
+            disabled={reportLoading}
+          >
+            {reportLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileText className="h-3.5 w-3.5" />
+            )}
+            Generate Report
+          </Button>
           {deviation.status === "open" && (
             <Button
               size="sm"
@@ -732,6 +774,60 @@ export default function DeviationDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* AI-Generated Investigation Report */}
+      {reportContent && (
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-gray-700" />
+                <CardTitle className="text-sm font-semibold text-gray-800">
+                  AI-Generated Investigation Report
+                </CardTitle>
+                <span className="text-[10px] font-medium text-gray-500 border border-gray-300 rounded-full px-2 py-0.5">
+                  Human review required before filing
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-7 text-xs"
+                  onClick={handleCopyReport}
+                >
+                  <Copy className="h-3 w-3" />
+                  {reportCopied ? "Copied!" : "Copy"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-7 text-xs"
+                  onClick={handleGenerateReport}
+                  disabled={reportLoading}
+                >
+                  {reportLoading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  Regenerate
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg bg-gray-50 border border-gray-200 p-5">
+              <pre className="whitespace-pre-wrap text-xs text-gray-800 font-mono leading-relaxed">
+                {reportContent}
+              </pre>
+            </div>
+            <p className="mt-3 text-xs text-gray-400">
+              This report is AI-generated. Review, edit as needed, then obtain QA approval and e-signature before archiving. Compliant with FDA 21 CFR 211.192 and ICH Q10 documentation requirements.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resolution Info */}
       {deviation.resolvedBy && (

@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ClipboardCheck, Eye, Loader2 } from "lucide-react"
+import { ClipboardCheck, Eye, Loader2, ShieldAlert } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
 
 // ============================================
@@ -35,6 +35,8 @@ interface BatchReviewItem {
     batchNumber: string
     completedAt: string | null
     yieldPercentage: number | null
+    riskScore: number | null
+    riskCategory: string | null
     mbr: {
       product: {
         productName: string
@@ -176,6 +178,12 @@ export default function ReviewQueuePage() {
                     Completed Date
                   </TableHead>
                   <TableHead className="text-xs font-medium text-gray-500">Yield %</TableHead>
+                  <TableHead className="text-xs font-medium text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <ShieldAlert className="h-3 w-3" />
+                      AI Risk
+                    </span>
+                  </TableHead>
                   <TableHead className="text-xs font-medium text-gray-500">Deviations</TableHead>
                   <TableHead className="text-xs font-medium text-gray-500">
                     Stage 1 (QA Reviewer)
@@ -236,6 +244,28 @@ export default function ReviewQueuePage() {
                         </span>
                       ) : (
                         <span className="text-gray-300">—</span>
+                      )}
+                    </TableCell>
+                    {/* AI Risk Score */}
+                    <TableCell>
+                      {review.batch.riskCategory ? (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium ${
+                            review.batch.riskCategory === "HIGH"
+                              ? "bg-gray-800 text-white border-gray-800"
+                              : review.batch.riskCategory === "MEDIUM"
+                              ? "bg-gray-200 text-gray-700 border-gray-300"
+                              : "bg-gray-50 text-gray-500 border-gray-200"
+                          }`}
+                        >
+                          <ShieldAlert className="h-3 w-3" />
+                          {review.batch.riskCategory}
+                          {review.batch.riskScore != null && (
+                            <span className="opacity-60 ml-0.5">({review.batch.riskScore})</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
                       )}
                     </TableCell>
                     <TableCell className="text-sm">

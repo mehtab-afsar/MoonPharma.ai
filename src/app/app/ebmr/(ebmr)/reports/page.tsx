@@ -24,6 +24,7 @@ import {
   Clock,
   Eye,
   ArrowRight,
+  Sparkles,
 } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
 
@@ -215,6 +216,42 @@ export default async function ReportsPage() {
             Batch analytics, yield trends, deviation summary, and release metrics.
           </p>
         </div>
+      </div>
+
+      {/* AI Analytics Quick Links */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Link href={ROUTES.REPORT_OOS_TRENDS} className="group">
+          <Card className="border border-gray-200 shadow-sm hover:border-gray-400 hover:shadow-md transition-all cursor-pointer">
+            <CardContent className="p-5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 group-hover:underline">OOS Trend Analysis</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  AI-powered out-of-specification patterns by step, product, and equipment
+                </p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-gray-400 mt-1 ml-auto shrink-0 group-hover:text-gray-700 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href={ROUTES.REPORT_YIELD_ANALYTICS} className="group">
+          <Card className="border border-gray-200 shadow-sm hover:border-gray-400 hover:shadow-md transition-all cursor-pointer">
+            <CardContent className="p-5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 group-hover:underline">Yield Performance Analytics</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  AI-detected yield trends, drift alerts, and product comparison
+                </p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-gray-400 mt-1 ml-auto shrink-0 group-hover:text-gray-700 transition-colors" />
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* ── KPI Row ── */}

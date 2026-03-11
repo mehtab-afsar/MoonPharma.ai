@@ -512,6 +512,8 @@ model Batch {
   actualYieldValue  Decimal?    @map("actual_yield_value") @db.Decimal(12, 3)
   actualYieldUnit   String?     @map("actual_yield_unit")
   yieldPercentage   Decimal?    @map("yield_percentage") @db.Decimal(5, 2)
+  riskScore         Int?        @map("risk_score")
+  riskCategory      String?     @map("risk_category")
   initiatedById     String      @map("initiated_by")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")

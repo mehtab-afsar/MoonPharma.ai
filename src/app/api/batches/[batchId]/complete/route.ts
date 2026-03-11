@@ -6,6 +6,7 @@ import {
   unauthorizedResponse,
 } from "@/server/utils/api-response"
 import { completeBatch } from "@/server/services/batch.server"
+import { calculateBatchRiskScore, saveBatchRiskScore } from "@/server/ai/batch-risk-scorer"
 
 export async function POST(
   request: Request,
@@ -38,6 +39,11 @@ export async function POST(
       actualYieldUnit,
       theoreticalYield: Number(theoreticalYield),
     })
+
+    // Calculate and persist AI risk score (non-blocking)
+    calculateBatchRiskScore(batchId, session.user.orgId)
+      .then((riskResult) => saveBatchRiskScore(batchId, riskResult))
+      .catch((err) => console.error("[batch-complete] Risk scoring failed:", err))
 
     return successResponse(result)
   } catch (error) {

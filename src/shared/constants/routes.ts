@@ -61,6 +61,8 @@ export const ROUTES = {
   REPORT_YIELD: "/app/ebmr/reports/yield-analysis",
   REPORT_BATCH_HISTORY: "/app/ebmr/reports/batch-history",
   REPORT_DEVIATIONS: "/app/ebmr/reports/deviation-summary",
+  REPORT_OOS_TRENDS: "/app/ebmr/reports/oos-trends",
+  REPORT_YIELD_ANALYTICS: "/app/ebmr/reports/yield-analytics",
 
   // Settings
   SETTINGS: "/app/ebmr/settings",

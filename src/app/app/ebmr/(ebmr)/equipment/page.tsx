@@ -14,8 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Plus, Cpu, Eye, AlertCircle } from "lucide-react"
+import { Plus, Cpu, Eye, AlertCircle, ShieldAlert } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
+import { getEquipmentRiskScores } from "@/server/services/equipment-risk.server"
 
 const STATUS_STYLES: Record<string, string> = {
   available:   "bg-gray-50 text-gray-700 border-gray-200",
@@ -45,7 +46,10 @@ export default async function EquipmentPage() {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/login")
 
-  const equipment = await getEquipment(session.user.orgId)
+  const [equipment, riskScores] = await Promise.all([
+    getEquipment(session.user.orgId),
+    getEquipmentRiskScores(session.user.orgId),
+  ])
 
   const counts = {
     total: equipment.length,
@@ -134,12 +138,19 @@ export default async function EquipmentPage() {
                   <TableHead className="text-xs font-medium text-gray-500">Last Calibration</TableHead>
                   <TableHead className="text-xs font-medium text-gray-500">Next Calibration</TableHead>
                   <TableHead className="text-xs font-medium text-gray-500">Status</TableHead>
+                  <TableHead className="text-xs font-medium text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <ShieldAlert className="h-3 w-3" />
+                      Risk
+                    </span>
+                  </TableHead>
                   <TableHead className="pr-6 text-right text-xs font-medium text-gray-500">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {equipment.map((eq) => {
                   const due = isCalibrationDue(eq.nextCalibrationDate)
+                  const risk = riskScores.get(eq.id)
                   return (
                     <TableRow key={eq.id} className="border-gray-100 hover:bg-gray-50/50">
                       <TableCell className="pl-6 font-mono text-xs font-medium text-gray-700">
@@ -167,6 +178,25 @@ export default async function EquipmentPage() {
                         >
                           {STATUS_LABELS[eq.status] ?? eq.status}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        {risk ? (
+                          <span
+                            title={risk.riskFactors.join("; ")}
+                            className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium cursor-help ${
+                              risk.riskScore === "high"
+                                ? "bg-gray-800 text-white border-gray-800"
+                                : risk.riskScore === "medium"
+                                ? "bg-gray-200 text-gray-700 border-gray-300"
+                                : "bg-gray-50 text-gray-500 border-gray-200"
+                            }`}
+                          >
+                            <ShieldAlert className="h-3 w-3" />
+                            {risk.riskScore.charAt(0).toUpperCase() + risk.riskScore.slice(1)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="pr-6 text-right">
                         <Button asChild size="sm" variant="ghost" className="gap-1.5">

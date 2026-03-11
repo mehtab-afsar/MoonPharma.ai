@@ -97,6 +97,7 @@ interface BatchStep {
   startedAt: string | null
   completedAt: string | null
   mbrStep: {
+    id: string
     stepName: string
     stage: string
     instructions: string

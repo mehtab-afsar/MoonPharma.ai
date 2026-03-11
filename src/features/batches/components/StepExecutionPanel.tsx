@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Play, CheckCircle2, Thermometer, Wrench, ClipboardList, FlaskConical, UserCheck, ShieldCheck, X, AlertTriangle } from "lucide-react"
+import { Loader2, Play, CheckCircle2, Thermometer, Wrench, ClipboardList, FlaskConical, UserCheck, ShieldCheck, X, AlertTriangle, Sparkles } from "lucide-react"
 import { DeviationQuickLogModal } from "./DeviationQuickLogModal"
 
 interface Parameter {
@@ -52,6 +52,7 @@ interface StepDetail {
   startedAt: string | null
   completedAt: string | null
   mbrStep: {
+    id: string
     stepName: string
     stage: string
     instructions: string
@@ -104,6 +105,48 @@ export function StepExecutionPanel({ step, batchId, onStepUpdate }: StepExecutio
     })
     return initial
   })
+
+  // Anomaly warnings: paramId -> warning message (only shown when statistically unusual but within spec)
+  const [anomalyWarnings, setAnomalyWarnings] = useState<Record<string, string>>({})
+
+  async function checkParamAnomaly(param: Parameter, value: string) {
+    if (param.parameterType !== "numeric" || !value) return
+    const numVal = parseFloat(value)
+    if (isNaN(numVal)) return
+    // Only check if value is WITHIN spec (OOS is already flagged by the server)
+    if (
+      param.minValue != null &&
+      param.maxValue != null &&
+      (numVal < param.minValue || numVal > param.maxValue)
+    ) {
+      return // Already OOS — server will flag it
+    }
+    try {
+      const res = await fetch("/api/analytics/parameter-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mbrStepId: step.mbrStep.id,
+          parameterName: param.parameterName,
+          mbrParameterId: param.id,
+          actualNumericValue: numVal,
+        }),
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.data?.isAnomaly) {
+        setAnomalyWarnings((prev) => ({ ...prev, [param.id]: data.data.message }))
+      } else {
+        setAnomalyWarnings((prev) => {
+          const next = { ...prev }
+          delete next[param.id]
+          return next
+        })
+      }
+    } catch {
+      // Non-critical — don't surface errors to user
+    }
+  }
 
   // Step sign-off fields
   const [remarks, setRemarks] = useState("")
@@ -496,6 +539,7 @@ export function StepExecutionPanel({ step, batchId, onStepUpdate }: StepExecutio
                     onChange={(e) =>
                       setParamValues((prev) => ({ ...prev, [param.id]: e.target.value }))
                     }
+                    onBlur={(e) => checkParamAnomaly(param, e.target.value)}
                     disabled={!isInProgress}
                   />
                 ) : (
@@ -525,6 +569,14 @@ export function StepExecutionPanel({ step, batchId, onStepUpdate }: StepExecutio
                       )
                     })()
                   )}
+
+                {/* AI anomaly soft warning — within spec but statistically unusual */}
+                {anomalyWarnings[param.id] && (
+                  <div className="flex items-start gap-1.5 rounded-md border border-gray-300 bg-gray-50 px-2.5 py-2 text-xs text-gray-700">
+                    <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0 text-gray-500" />
+                    <span>{anomalyWarnings[param.id]}</span>
+                  </div>
+                )}
 
                 {isCompleted && param.recordedValue && (
                   <p className="text-xs text-gray-500">
