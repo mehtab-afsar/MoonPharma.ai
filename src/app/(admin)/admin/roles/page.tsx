@@ -1,219 +1,170 @@
 "use client"
 
-import { useEffect, useState, useCallback, Fragment } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { toast } from "sonner"
-import { Shield, Loader2, Save } from "lucide-react"
+import { Loader2, Pencil, Check, X } from "lucide-react"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 
-const ROLES = [
-  { key: "admin", label: "Admin" },
-  { key: "production_head", label: "Prod. Head" },
-  { key: "supervisor", label: "Supervisor" },
-  { key: "operator", label: "Operator" },
-  { key: "qa_reviewer", label: "QA Reviewer" },
-  { key: "qa_head", label: "QA Head" },
-]
-
-const PERMISSION_GROUPS = [
-  {
-    group: "Batch Records",
-    items: [
-      { key: "batch.view", label: "View batches" },
-      { key: "batch.create", label: "Create batch" },
-      { key: "batch.execute", label: "Execute steps" },
-      { key: "batch.complete", label: "Complete batch" },
-    ],
-  },
-  {
-    group: "Master Batch Records",
-    items: [
-      { key: "mbr.view", label: "View MBR" },
-      { key: "mbr.create", label: "Create MBR" },
-      { key: "mbr.edit", label: "Edit MBR" },
-      { key: "mbr.approve", label: "Approve MBR" },
-    ],
-  },
-  {
-    group: "Quality Review",
-    items: [
-      { key: "review.submit", label: "Submit for review" },
-      { key: "review.qa", label: "Perform QA review" },
-      { key: "review.approve", label: "Final QA approval" },
-    ],
-  },
-  {
-    group: "Deviations",
-    items: [
-      { key: "deviation.view", label: "View deviations" },
-      { key: "deviation.create", label: "Create deviation" },
-      { key: "deviation.close", label: "Investigate & close" },
-    ],
-  },
-  {
-    group: "Products & Materials",
-    items: [
-      { key: "product.view", label: "View products" },
-      { key: "product.edit", label: "Create/edit products" },
-      { key: "material.view", label: "View materials" },
-      { key: "material.edit", label: "Create/edit materials" },
-    ],
-  },
-  {
-    group: "Equipment",
-    items: [
-      { key: "equipment.view", label: "View equipment" },
-      { key: "equipment.edit", label: "Create/edit equipment" },
-    ],
-  },
-  {
-    group: "Administration",
-    items: [
-      { key: "audit.view", label: "Audit trail access" },
-      { key: "team.manage", label: "Manage team" },
-      { key: "config.edit", label: "Configure workflow" },
-      { key: "categories.manage", label: "Manage categories" },
-      { key: "reports.view", label: "View reports" },
-    ],
-  },
-]
-
-// Default permissions applied when no saved config exists
-const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  admin: PERMISSION_GROUPS.flatMap(g => g.items.map(i => i.key)),
-  production_head: ["batch.view", "batch.create", "batch.execute", "batch.complete", "mbr.view", "review.submit", "deviation.view", "deviation.create", "product.view", "material.view", "material.edit", "equipment.view", "equipment.edit"],
-  supervisor: ["batch.view", "batch.execute", "mbr.view", "review.submit", "deviation.view", "deviation.create", "product.view", "material.view", "equipment.view"],
-  operator: ["batch.view", "batch.execute", "mbr.view", "deviation.view", "product.view", "material.view", "equipment.view"],
-  qa_reviewer: ["batch.view", "mbr.view", "review.qa", "deviation.view", "deviation.create", "deviation.close", "product.view", "material.view", "equipment.view", "audit.view", "reports.view"],
-  qa_head: ["batch.view", "batch.create", "mbr.view", "mbr.create", "mbr.edit", "mbr.approve", "review.qa", "review.approve", "deviation.view", "deviation.create", "deviation.close", "product.view", "product.edit", "material.view", "material.edit", "equipment.view", "audit.view", "reports.view"],
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  production_head: "Production Head",
+  supervisor: "Supervisor",
+  operator: "Operator",
+  qa_reviewer: "QA Reviewer",
+  qa_head: "QA Head",
 }
 
-type PermissionMap = Record<string, string[]>
+const ROLES = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
+
+type User = { id: string; fullName: string; email: string; employeeId: string; role: string; department: string | null; isActive: boolean }
+
+function initials(name: string) {
+  return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase()
+}
 
 export default function RolesPage() {
-  const [permissions, setPermissions] = useState<PermissionMap>(DEFAULT_PERMISSIONS)
+  const { data: session } = useSession()
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [selectedRole, setSelectedRole] = useState<string>("")
   const [saving, setSaving] = useState(false)
-  const [dirty, setDirty] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      const r = await fetch("/api/config/role-permissions")
-      if (r.ok) {
-        const res = await r.json()
-        if (res.success && res.data.rolePermissions) {
-          setPermissions(res.data.rolePermissions as PermissionMap)
-        }
-      }
-    } catch {
-      // fall back to defaults silently
-    } finally {
-      setLoading(false)
-    }
+  const reload = useCallback(async () => {
+    const res = await fetch("/api/users").then(r => r.json())
+    if (res.success) setUsers(res.data)
+    setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { reload() }, [reload])
 
-  function toggle(role: string, permKey: string) {
-    setPermissions(prev => {
-      const current = prev[role] ?? []
-      const next = current.includes(permKey)
-        ? current.filter(p => p !== permKey)
-        : [...current, permKey]
-      return { ...prev, [role]: next }
-    })
-    setDirty(true)
+  function startEdit(user: User) {
+    setEditingId(user.id)
+    setSelectedRole(user.role)
   }
 
-  async function handleSave() {
+  function cancelEdit() {
+    setEditingId(null)
+    setSelectedRole("")
+  }
+
+  async function saveRole(userId: string) {
     setSaving(true)
     try {
-      const res = await fetch("/api/config/role-permissions", {
+      const res = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rolePermissions: permissions }),
+        body: JSON.stringify({ role: selectedRole }),
       }).then(r => r.json())
-      if (!res.success) { toast.error(res.message ?? "Failed to save"); return }
-      toast.success("Role permissions saved")
-      setDirty(false)
+      if (!res.success) { toast.error(res.message ?? "Failed to update role"); return }
+      toast.success("Role assigned")
+      setEditingId(null)
+      reload()
     } catch { toast.error("Something went wrong") }
     finally { setSaving(false) }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-48">
-        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-      </div>
-    )
-  }
-
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-black flex items-center justify-center">
-            <Shield className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Role Permissions</h1>
-            <p className="text-sm text-gray-500">Configure what each role can do in your organisation</p>
-          </div>
-        </div>
-        <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-          Save Changes
-        </Button>
+    <div className="space-y-6 max-w-5xl">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-semibold text-gray-900">Role Assignment</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Assign and manage roles for each team member.</p>
       </div>
 
+      {/* Members Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+          </div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-16 text-sm text-gray-400">
+            No team members yet. Add members from Team Management first.
+          </div>
+        ) : (
+          <table className="w-full">
             <thead>
-              <tr className="bg-black text-white">
-                <th className="px-4 py-3 text-left font-medium w-52">Permission</th>
-                {ROLES.map(r => (
-                  <th key={r.key} className="px-3 py-3 text-center font-medium whitespace-nowrap">
-                    {r.label}
-                  </th>
-                ))}
+              <tr className="bg-gray-900 text-white text-xs font-semibold uppercase tracking-wider">
+                <th className="text-left px-5 py-3">Member</th>
+                <th className="text-left px-4 py-3">Employee ID</th>
+                <th className="text-left px-4 py-3">Department</th>
+                <th className="text-left px-4 py-3">Current Role</th>
+                <th className="text-left px-4 py-3">Status</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody>
-              {PERMISSION_GROUPS.map(group => (
-                <Fragment key={group.group}>
-                  <tr className="bg-gray-50">
-                    <td colSpan={ROLES.length + 1} className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      {group.group}
+            <tbody className="divide-y divide-gray-100">
+              {users.map(user => {
+                const isEditing = editingId === user.id
+                const isSelf = user.id === session?.user?.id
+                return (
+                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${user.isActive ? "bg-gray-900" : "bg-gray-300"}`}>
+                          {initials(user.fullName)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{user.fullName}</p>
+                          <p className="text-xs text-gray-500">{user.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 font-mono">{user.employeeId}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{user.department ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <select
+                          value={selectedRole}
+                          onChange={e => setSelectedRole(e.target.value)}
+                          className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-black"
+                          autoFocus
+                        >
+                          {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                        </select>
+                      ) : (
+                        <span className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md border border-gray-200">
+                          {ROLE_LABELS[user.role] ?? user.role}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${user.isActive ? "bg-gray-50 text-gray-700 border-gray-200" : "bg-gray-100 text-gray-400 border-gray-200"}`}>
+                        {user.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {isSelf ? (
+                        <span className="text-xs text-gray-300">—</span>
+                      ) : isEditing ? (
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <Button size="sm" onClick={() => saveRole(user.id)} disabled={saving} className="h-7 px-2.5 text-xs">
+                            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Check className="h-3 w-3 mr-1" />Save</>}
+                          </Button>
+                          <button onClick={cancelEdit} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => startEdit(user)}
+                          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 border border-gray-200 rounded-md px-2.5 py-1 hover:border-gray-400 transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" /> Assign Role
+                        </button>
+                      )}
                     </td>
                   </tr>
-                  {group.items.map((item, idx) => (
-                    <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
-                      <td className="px-4 py-2.5 text-gray-700 text-xs">{item.label}</td>
-                      {ROLES.map(role => {
-                        const checked = (permissions[role.key] ?? []).includes(item.key)
-                        const isAdmin = role.key === "admin"
-                        return (
-                          <td key={role.key} className="px-3 py-2.5 text-center">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={isAdmin}
-                              onChange={() => !isAdmin && toggle(role.key, item.key)}
-                              className="w-4 h-4 rounded border-gray-300 text-black accent-black cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                            />
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </Fragment>
-              ))}
+                )
+              })}
             </tbody>
           </table>
-        </div>
+        )}
       </div>
 
-      <p className="text-xs text-gray-400">Admin always has full access and cannot be restricted.</p>
+      <p className="text-xs text-gray-400">Your own role cannot be changed from this screen.</p>
     </div>
   )
 }

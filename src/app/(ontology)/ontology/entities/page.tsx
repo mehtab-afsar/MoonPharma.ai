@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Plus, Loader2, Shield, ArrowRight } from "lucide-react"
+import { Plus, Loader2, Shield, ArrowRight, FlaskConical, Package, Wrench, FileText, Layers, AlertTriangle, User as UserIcon, Database, LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,6 +23,24 @@ type OntologyEntity = {
   appRoute: string | null
   hasLifecycle: boolean
   isVersioned: boolean
+}
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  FlaskConical,
+  Package,
+  Wrench,
+  FileText,
+  Layers,
+  AlertTriangle,
+  User: UserIcon,
+  Database,
+}
+
+function EntityIcon({ name, className }: { name: string | null; className?: string }) {
+  if (!name) return null
+  const Icon = ICON_MAP[name]
+  if (!Icon) return null
+  return <Icon className={className ?? "h-5 w-5 text-gray-600"} />
 }
 
 const GROUP_ORDER = ["master_data", "operations", "quality", "people", "documents"]
@@ -222,7 +240,11 @@ function EntityCard({ entity }: { entity: OntologyEntity }) {
       <div className="p-4 space-y-3">
         {/* Top */}
         <div className="flex items-start gap-2.5">
-          {entity.icon && <span className="text-xl mt-0.5">{entity.icon}</span>}
+          {entity.icon && (
+            <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+              <EntityIcon name={entity.icon} className="h-4 w-4 text-gray-600" />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-gray-900 text-sm leading-tight">{entity.displayName}</p>
             <p className="text-xs text-gray-400 mt-0.5">{entity.pluralLabel}</p>
