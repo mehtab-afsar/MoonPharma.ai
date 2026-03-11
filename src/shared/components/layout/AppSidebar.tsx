@@ -18,7 +18,7 @@ import {
   Bot,
   BarChart3,
   Settings,
-  ArrowLeft, // eslint-disable-line @typescript-eslint/no-unused-vars
+  ArrowLeft,
 } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
 
