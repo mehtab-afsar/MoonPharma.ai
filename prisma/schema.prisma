@@ -818,6 +818,9 @@ model OrgConfiguration {
   defaultYieldMax          Float            @default(102.0) @map("default_yield_max")
   defaultMaterialTolerance Float            @default(2.0) @map("default_material_tolerance")
 
+  // Configurable role permissions (JSON map of role -> permission[])
+  rolePermissions          Json?            @map("role_permissions")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

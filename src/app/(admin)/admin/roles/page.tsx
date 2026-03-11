@@ -1,107 +1,160 @@
 "use client"
 
-import React from "react"
-import { Shield } from "lucide-react"
+import { useEffect, useState, useCallback } from "react"
+import { toast } from "sonner"
+import { Shield, Loader2, Save } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
-const roles = [
+const ROLES = [
   { key: "admin", label: "Admin" },
-  { key: "production_supervisor", label: "Prod. Supervisor" },
-  { key: "production_operator", label: "Operator" },
+  { key: "production_head", label: "Prod. Head" },
+  { key: "supervisor", label: "Supervisor" },
+  { key: "operator", label: "Operator" },
   { key: "qa_reviewer", label: "QA Reviewer" },
   { key: "qa_head", label: "QA Head" },
-  { key: "viewer", label: "Viewer" },
 ]
 
-const permissions = [
+const PERMISSION_GROUPS = [
   {
     group: "Batch Records",
     items: [
-      { label: "View batches", allowed: ["admin", "production_supervisor", "production_operator", "qa_reviewer", "qa_head", "viewer"] },
-      { label: "Create batch", allowed: ["admin", "production_supervisor"] },
-      { label: "Execute steps", allowed: ["admin", "production_supervisor", "production_operator"] },
-      { label: "Complete batch", allowed: ["admin", "production_supervisor"] },
+      { key: "batch.view", label: "View batches" },
+      { key: "batch.create", label: "Create batch" },
+      { key: "batch.execute", label: "Execute steps" },
+      { key: "batch.complete", label: "Complete batch" },
     ],
   },
   {
     group: "Master Batch Records",
     items: [
-      { label: "View MBR", allowed: ["admin", "production_supervisor", "production_operator", "qa_reviewer", "qa_head", "viewer"] },
-      { label: "Create MBR", allowed: ["admin", "qa_head"] },
-      { label: "Edit MBR", allowed: ["admin", "qa_head"] },
-      { label: "Approve MBR", allowed: ["admin", "qa_head"] },
+      { key: "mbr.view", label: "View MBR" },
+      { key: "mbr.create", label: "Create MBR" },
+      { key: "mbr.edit", label: "Edit MBR" },
+      { key: "mbr.approve", label: "Approve MBR" },
     ],
   },
   {
     group: "Quality Review",
     items: [
-      { label: "Submit for review", allowed: ["admin", "production_supervisor"] },
-      { label: "Perform QA review", allowed: ["admin", "qa_reviewer", "qa_head"] },
-      { label: "Final QA approval", allowed: ["admin", "qa_head"] },
+      { key: "review.submit", label: "Submit for review" },
+      { key: "review.qa", label: "Perform QA review" },
+      { key: "review.approve", label: "Final QA approval" },
     ],
   },
   {
     group: "Deviations",
     items: [
-      { label: "View deviations", allowed: ["admin", "production_supervisor", "qa_reviewer", "qa_head", "viewer"] },
-      { label: "Create deviation", allowed: ["admin", "production_supervisor", "qa_reviewer", "qa_head"] },
-      { label: "Investigate & close", allowed: ["admin", "qa_reviewer", "qa_head"] },
+      { key: "deviation.view", label: "View deviations" },
+      { key: "deviation.create", label: "Create deviation" },
+      { key: "deviation.close", label: "Investigate & close" },
     ],
   },
   {
     group: "Products & Materials",
     items: [
-      { label: "View products", allowed: ["admin", "production_supervisor", "production_operator", "qa_reviewer", "qa_head", "viewer"] },
-      { label: "Create/edit products", allowed: ["admin", "qa_head"] },
-      { label: "View materials", allowed: ["admin", "production_supervisor", "production_operator", "qa_reviewer", "qa_head", "viewer"] },
-      { label: "Create/edit materials", allowed: ["admin", "production_supervisor", "qa_head"] },
+      { key: "product.view", label: "View products" },
+      { key: "product.edit", label: "Create/edit products" },
+      { key: "material.view", label: "View materials" },
+      { key: "material.edit", label: "Create/edit materials" },
     ],
   },
   {
     group: "Equipment",
     items: [
-      { label: "View equipment", allowed: ["admin", "production_supervisor", "production_operator", "qa_reviewer", "qa_head", "viewer"] },
-      { label: "Create/edit equipment", allowed: ["admin", "production_supervisor"] },
+      { key: "equipment.view", label: "View equipment" },
+      { key: "equipment.edit", label: "Create/edit equipment" },
     ],
   },
   {
     group: "Administration",
     items: [
-      { label: "Audit trail access", allowed: ["admin", "qa_reviewer", "qa_head"] },
-      { label: "Manage team", allowed: ["admin"] },
-      { label: "Configure workflow", allowed: ["admin"] },
-      { label: "Manage categories", allowed: ["admin"] },
-      { label: "View reports", allowed: ["admin", "qa_head"] },
+      { key: "audit.view", label: "Audit trail access" },
+      { key: "team.manage", label: "Manage team" },
+      { key: "config.edit", label: "Configure workflow" },
+      { key: "categories.manage", label: "Manage categories" },
+      { key: "reports.view", label: "View reports" },
     ],
   },
 ]
 
-function Cell({ allowed }: { allowed: boolean }) {
-  return (
-    <td className="px-4 py-3 text-center">
-      {allowed ? (
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-black text-white text-xs font-bold">✓</span>
-      ) : (
-        <span className="text-gray-300 text-lg leading-none">—</span>
-      )}
-    </td>
-  )
+// Default permissions applied when no saved config exists
+const DEFAULT_PERMISSIONS: Record<string, string[]> = {
+  admin: PERMISSION_GROUPS.flatMap(g => g.items.map(i => i.key)),
+  production_head: ["batch.view", "batch.create", "batch.execute", "batch.complete", "mbr.view", "review.submit", "deviation.view", "deviation.create", "product.view", "material.view", "material.edit", "equipment.view", "equipment.edit"],
+  supervisor: ["batch.view", "batch.execute", "mbr.view", "review.submit", "deviation.view", "deviation.create", "product.view", "material.view", "equipment.view"],
+  operator: ["batch.view", "batch.execute", "mbr.view", "deviation.view", "product.view", "material.view", "equipment.view"],
+  qa_reviewer: ["batch.view", "mbr.view", "review.qa", "deviation.view", "deviation.create", "deviation.close", "product.view", "material.view", "equipment.view", "audit.view", "reports.view"],
+  qa_head: ["batch.view", "batch.create", "mbr.view", "mbr.create", "mbr.edit", "mbr.approve", "review.qa", "review.approve", "deviation.view", "deviation.create", "deviation.close", "product.view", "product.edit", "material.view", "material.edit", "equipment.view", "audit.view", "reports.view"],
 }
 
+type PermissionMap = Record<string, string[]>
+
 export default function RolesPage() {
+  const [permissions, setPermissions] = useState<PermissionMap>(DEFAULT_PERMISSIONS)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  const load = useCallback(async () => {
+    const res = await fetch("/api/config/role-permissions").then(r => r.json())
+    if (res.success && res.data.rolePermissions) {
+      setPermissions(res.data.rolePermissions as PermissionMap)
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  function toggle(role: string, permKey: string) {
+    setPermissions(prev => {
+      const current = prev[role] ?? []
+      const next = current.includes(permKey)
+        ? current.filter(p => p !== permKey)
+        : [...current, permKey]
+      return { ...prev, [role]: next }
+    })
+    setDirty(true)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const res = await fetch("/api/config/role-permissions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rolePermissions: permissions }),
+      }).then(r => r.json())
+      if (!res.success) { toast.error(res.message ?? "Failed to save"); return }
+      toast.success("Role permissions saved")
+      setDirty(false)
+    } catch { toast.error("Something went wrong") }
+    finally { setSaving(false) }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-black flex items-center justify-center">
-          <Shield className="w-4.5 h-4.5 text-white" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-black flex items-center justify-center">
+            <Shield className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Role Permissions</h1>
+            <p className="text-sm text-gray-500">Configure what each role can do in your organisation</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Role Permissions</h1>
-          <p className="text-sm text-gray-500">Permission matrix for all roles in the system</p>
-        </div>
-      </div>
-
-      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
-        Role permissions are fixed by the system. Contact support to request custom role configurations.
+        <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+          Save Changes
+        </Button>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -109,50 +162,50 @@ export default function RolesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-black text-white">
-                <th className="px-4 py-3 text-left font-medium">Permission</th>
-                {roles.map((r) => (
-                  <th key={r.key} className="px-4 py-3 text-center font-medium whitespace-nowrap">
+                <th className="px-4 py-3 text-left font-medium w-52">Permission</th>
+                {ROLES.map(r => (
+                  <th key={r.key} className="px-3 py-3 text-center font-medium whitespace-nowrap">
                     {r.label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {permissions.map((group) => (
-                <React.Fragment key={group.group}>
-                  <tr className="bg-gray-50">
-                    <td
-                      colSpan={roles.length + 1}
-                      className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider"
-                    >
+              {PERMISSION_GROUPS.map(group => (
+                <>
+                  <tr key={group.group} className="bg-gray-50">
+                    <td colSpan={ROLES.length + 1} className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       {group.group}
                     </td>
                   </tr>
                   {group.items.map((item, idx) => (
-                    <tr key={item.label} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
-                      <td className="px-4 py-3 text-gray-700">{item.label}</td>
-                      {roles.map((r) => (
-                        <Cell key={r.key} allowed={item.allowed.includes(r.key)} />
-                      ))}
+                    <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                      <td className="px-4 py-2.5 text-gray-700 text-xs">{item.label}</td>
+                      {ROLES.map(role => {
+                        const checked = (permissions[role.key] ?? []).includes(item.key)
+                        const isAdmin = role.key === "admin"
+                        return (
+                          <td key={role.key} className="px-3 py-2.5 text-center">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={isAdmin}
+                              onChange={() => !isAdmin && toggle(role.key, item.key)}
+                              className="w-4 h-4 rounded border-gray-300 text-black accent-black cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                          </td>
+                        )
+                      })}
                     </tr>
                   ))}
-                </React.Fragment>
+                </>
               ))}
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="flex gap-4 text-sm text-gray-500">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-black text-white text-xs">✓</span>
-          Allowed
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="text-gray-300 text-base leading-none">—</span>
-          Not allowed
-        </span>
-      </div>
+      <p className="text-xs text-gray-400">Admin always has full access and cannot be restricted.</p>
     </div>
   )
 }
