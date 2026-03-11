@@ -5,12 +5,14 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
-import { UserPlus, Copy, Check, Loader2, MoreVertical, X, Pencil } from "lucide-react"
+import { UserPlus, Copy, Check, Loader2, MoreVertical, X, Pencil, ChevronDown } from "lucide-react"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 const ROLES = [
+  { value: "admin", label: "Admin" },
   { value: "production_head", label: "Production Head" },
   { value: "supervisor", label: "Supervisor" },
   { value: "operator", label: "Operator" },
@@ -68,6 +70,7 @@ function CopyLinkCard({ link, onClose }: { link: string; onClose: () => void }) 
 }
 
 export default function AdminTeamPage() {
+  const { data: session } = useSession()
   const [tab, setTab] = useState<"members" | "invitations">("members")
   const [users, setUsers] = useState<User[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -77,6 +80,7 @@ export default function AdminTeamPage() {
   const [submitting, setSubmitting] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [roleChanging, setRoleChanging] = useState<string | null>(null)
 
   const inviteForm = useForm<z.infer<typeof inviteSchema>>({
     resolver: zodResolver(inviteSchema),
@@ -131,6 +135,21 @@ export default function AdminTeamPage() {
     if (result.success) { toast.success(user.isActive ? "User deactivated" : "User activated"); reload() }
     else toast.error(result.message ?? "Failed")
     setOpenMenuId(null)
+  }
+
+  async function handleRoleChange(userId: string, newRole: string) {
+    setRoleChanging(userId)
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      })
+      const result = await res.json()
+      if (!result.success) { toast.error(result.message ?? "Failed to update role"); return }
+      toast.success("Role updated")
+      reload()
+    } catch { toast.error("Something went wrong") }
+    finally { setRoleChanging(null) }
   }
 
   async function handleEditSubmit(data: z.infer<typeof editSchema>) {
@@ -267,6 +286,7 @@ export default function AdminTeamPage() {
                   <th className="text-left px-4 py-3">Member</th>
                   <th className="text-left px-4 py-3">Employee ID</th>
                   <th className="text-left px-4 py-3">Role</th>
+                  <th className="text-left px-4 py-3">Department</th>
                   <th className="text-left px-4 py-3">Status</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -287,10 +307,26 @@ export default function AdminTeamPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 font-mono">{user.employeeId}</td>
                     <td className="px-4 py-3">
-                      <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full border border-gray-200">
-                        {ROLE_LABELS[user.role] ?? user.role}
-                      </span>
+                      {roleChanging === user.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
+                      ) : user.id === session?.user?.id ? (
+                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full border border-gray-200">
+                          {ROLE_LABELS[user.role] ?? user.role}
+                        </span>
+                      ) : (
+                        <div className="relative inline-flex items-center">
+                          <select
+                            value={user.role}
+                            onChange={e => handleRoleChange(user.id, e.target.value)}
+                            className="appearance-none text-xs bg-gray-50 border border-gray-200 text-gray-700 rounded-full pl-2.5 pr-6 py-0.5 cursor-pointer hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-black transition-colors"
+                          >
+                            {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-gray-400 pointer-events-none" />
+                        </div>
+                      )}
                     </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{user.department ?? "—"}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${user.isActive ? "bg-gray-50 text-gray-700 border-gray-200" : "bg-gray-100 text-gray-400 border-gray-200"}`}>
                         {user.isActive ? "Active" : "Inactive"}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, Fragment } from "react"
 import { toast } from "sonner"
 import { Shield, Loader2, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -96,11 +96,19 @@ export default function RolesPage() {
   const [dirty, setDirty] = useState(false)
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/config/role-permissions").then(r => r.json())
-    if (res.success && res.data.rolePermissions) {
-      setPermissions(res.data.rolePermissions as PermissionMap)
+    try {
+      const r = await fetch("/api/config/role-permissions")
+      if (r.ok) {
+        const res = await r.json()
+        if (res.success && res.data.rolePermissions) {
+          setPermissions(res.data.rolePermissions as PermissionMap)
+        }
+      }
+    } catch {
+      // fall back to defaults silently
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -172,8 +180,8 @@ export default function RolesPage() {
             </thead>
             <tbody>
               {PERMISSION_GROUPS.map(group => (
-                <>
-                  <tr key={group.group} className="bg-gray-50">
+                <Fragment key={group.group}>
+                  <tr className="bg-gray-50">
                     <td colSpan={ROLES.length + 1} className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                       {group.group}
                     </td>
@@ -198,7 +206,7 @@ export default function RolesPage() {
                       })}
                     </tr>
                   ))}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
