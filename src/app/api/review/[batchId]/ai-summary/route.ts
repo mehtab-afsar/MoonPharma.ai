@@ -9,6 +9,7 @@ import {
 import { getBatchReviews, saveAISummary } from "@/server/services/review.server"
 import { getBatchById } from "@/server/services/batch.server"
 import { generateBatchReviewSummary } from "@/server/ai/batch-reviewer"
+import { prisma } from "@/server/db/prisma"
 
 export async function POST(
   _request: Request,
@@ -28,11 +29,38 @@ export async function POST(
     const batchData = await getBatchById(batchId, session.user.orgId)
     if (!batchData) return notFoundResponse("Batch not found")
 
-    const aiSummary = await generateBatchReviewSummary(batchData)
+    const reviewResult = await generateBatchReviewSummary(batchData)
 
-    await saveAISummary(review.id, aiSummary, session.user.orgId)
+    await saveAISummary(
+      review.id,
+      reviewResult.summary,
+      session.user.orgId,
+      {
+        riskLevel: reviewResult.riskLevel,
+        approvalRecommendation: reviewResult.approvalRecommendation,
+        flaggedItems: reviewResult.flaggedItems,
+      }
+    )
 
-    return successResponse({ aiSummary })
+    // Log AI interaction for compliance
+    await prisma.aIInteraction.create({
+      data: {
+        orgId: session.user.orgId,
+        userId: session.user.id,
+        batchId,
+        interactionType: "batch_review",
+        prompt: `Batch review for ${batchData.batchNumber}`,
+        response: reviewResult.summary,
+        modelUsed: "anthropic/claude-opus-4-5",
+      },
+    })
+
+    return successResponse({
+      aiSummary: reviewResult.summary,
+      riskLevel: reviewResult.riskLevel,
+      approvalRecommendation: reviewResult.approvalRecommendation,
+      flaggedItems: reviewResult.flaggedItems,
+    })
   } catch (error) {
     console.error("[POST /api/review/[batchId]/ai-summary]", error)
     return errorResponse(

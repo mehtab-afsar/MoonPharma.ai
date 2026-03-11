@@ -20,12 +20,21 @@ import {
   User,
   Calendar,
   FileText,
+  Sparkles,
+  ShieldAlert,
 } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
 
 // ============================================
 // TYPES
 // ============================================
+
+interface FlaggedItem {
+  area: "material" | "parameter" | "ipc" | "deviation" | "yield" | "step"
+  label: string
+  detail: string
+  severity: "critical" | "major" | "minor"
+}
 
 interface BatchReviewDetail {
   id: string
@@ -319,6 +328,9 @@ export default function BatchReviewDetailPage() {
   const [loading, setLoading] = useState(true)
   const [generatingAI, setGeneratingAI] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [aiFlaggedItems, setAiFlaggedItems] = useState<FlaggedItem[]>([])
+  const [aiRiskLevel, setAiRiskLevel] = useState<"high" | "medium" | "low" | null>(null)
+  const [aiRecommendation, setAiRecommendation] = useState<"approve" | "return" | "reject" | null>(null)
 
   const loadReview = useCallback(async () => {
     const data = await fetchReview(batchId)
@@ -342,6 +354,10 @@ export default function BatchReviewDetailPage() {
         setAiError(json.message ?? "Failed to generate AI summary")
         return
       }
+      const json = await res2.json()
+      if (json.data?.flaggedItems) setAiFlaggedItems(json.data.flaggedItems)
+      if (json.data?.riskLevel) setAiRiskLevel(json.data.riskLevel)
+      if (json.data?.approvalRecommendation) setAiRecommendation(json.data.approvalRecommendation)
       await loadReview()
     } catch {
       setAiError("Network error. Please try again.")

@@ -1,9 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import Anthropic from "@anthropic-ai/sdk"
+import { callOpenRouter, MODELS } from "./openrouter-client"
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+export interface FlaggedItem {
+  area: "material" | "parameter" | "ipc" | "deviation" | "yield" | "step"
+  label: string
+  detail: string
+  severity: "critical" | "major" | "minor"
+}
 
-export async function generateBatchReviewSummary(batchData: any): Promise<string> {
+export interface BatchReviewResult {
+  summary: string
+  riskLevel: "high" | "medium" | "low"
+  approvalRecommendation: "approve" | "return" | "reject"
+  flaggedItems: FlaggedItem[]
+}
+
+export async function generateBatchReviewSummary(batchData: any): Promise<BatchReviewResult> {
   const batch = batchData
   const product = batch?.mbr?.product
   const materials = batch?.materials ?? []
@@ -106,7 +118,7 @@ export async function generateBatchReviewSummary(batchData: any): Promise<string
       })
     : "N/A"
 
-  const prompt = `You are a pharmaceutical QA reviewer performing a batch record review. Analyze the following batch manufacturing record and provide a structured review summary.
+  const prompt = `You are a pharmaceutical QA reviewer performing a batch record review. Analyze the following batch manufacturing record.
 
 Batch: ${batch.batchNumber ?? "N/A"}
 Product: ${product?.productName ?? "N/A"} ${product?.strength ?? ""} ${product?.dosageForm ?? ""}
@@ -122,29 +134,38 @@ ${stepsText || "  No steps recorded"}
 DEVIATIONS: ${deviations.length} deviation${deviations.length !== 1 ? "s" : ""} recorded
 ${deviationsText}
 
-Please provide:
-1. OVERALL ASSESSMENT: Pass/Fail recommendation with brief reasoning
-2. KEY FINDINGS: List notable observations (good and concerning)
-3. PARAMETER REVIEW: Any parameters outside specification
-4. DEVIATION SUMMARY: Impact assessment of any deviations
-5. YIELD ANALYSIS: Comment on yield percentage vs limits
-6. RECOMMENDATIONS: Any actions required before batch release`
+Respond in valid JSON with this exact structure:
+{
+  "summary": "Full narrative QA review summary covering: 1. OVERALL ASSESSMENT, 2. KEY FINDINGS, 3. PARAMETER REVIEW, 4. DEVIATION SUMMARY, 5. YIELD ANALYSIS, 6. RECOMMENDATIONS",
+  "riskLevel": "high|medium|low",
+  "approvalRecommendation": "approve|return|reject",
+  "flaggedItems": [
+    {
+      "area": "material|parameter|ipc|deviation|yield|step",
+      "label": "short label (e.g. 'Paracetamol dispensing')",
+      "detail": "specific concern with numbers if available",
+      "severity": "critical|major|minor"
+    }
+  ]
+}
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-  })
+flaggedItems should only include items that need reviewer attention (OOS, out-of-tolerance, unresolved deviations, low yield). Empty array if everything is acceptable.`
 
-  const content = message.content[0]
-  if (content.type === "text") {
-    return content.text
+  const result = await callOpenRouter(
+    [{ role: "user", content: prompt }],
+    { model: MODELS.SMART, maxTokens: 2500, responseFormat: "json" }
+  )
+
+  try {
+    const parsed = JSON.parse(result.content) as BatchReviewResult
+    return parsed
+  } catch {
+    // Fallback: wrap raw text as summary with no flags
+    return {
+      summary: result.content,
+      riskLevel: "medium",
+      approvalRecommendation: "return",
+      flaggedItems: [],
+    }
   }
-
-  throw new Error("Unexpected response format from AI model")
 }

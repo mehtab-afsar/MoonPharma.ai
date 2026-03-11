@@ -15,10 +15,13 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   FlaskConical,
   Loader2,
   Search,
+  Sparkles,
   User,
 } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
@@ -30,6 +33,20 @@ import {
 // ============================================
 // TYPES
 // ============================================
+
+interface AIRootCause {
+  cause: string
+  likelihood: "high" | "medium" | "low"
+  rationale: string
+}
+
+interface AISuggestion {
+  rootCauses: AIRootCause[]
+  investigationQuestions: string[]
+  capaTemplates: Array<{ corrective: string; preventive: string }>
+  similarPatterns: string
+  riskNote: string
+}
 
 interface DeviationDetail {
   id: string
@@ -158,6 +175,9 @@ export default function DeviationDetailPage() {
   const [correctiveAction, setCorrectiveAction] = useState("")
   const [preventiveAction, setPreventiveAction] = useState("")
   const [isEditing, setIsEditing] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState<AISuggestion | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiExpanded, setAiExpanded] = useState(true)
 
   const { data: deviation, isLoading } = useQuery<DeviationDetail>({
     queryKey: ["deviation", deviationId],
@@ -211,6 +231,29 @@ export default function DeviationDetailPage() {
       toast.error(error.message)
     },
   })
+
+  const handleAISuggest = async () => {
+    setAiLoading(true)
+    setAiSuggestion(null)
+    try {
+      const res = await fetch(`/api/deviations/${deviationId}/ai-suggest`, { method: "POST" })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.message ?? "AI request failed")
+      setAiSuggestion(json.data.suggestion)
+      setAiExpanded(true)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "AI suggestion failed")
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const applyAISuggestion = (capa: { corrective: string; preventive: string }) => {
+    if (!isEditing) setIsEditing(true)
+    setCorrectiveAction(capa.corrective)
+    setPreventiveAction(capa.preventive)
+    toast.success("CAPA template applied — review and edit as needed")
+  }
 
   const handleSaveInvestigation = () => {
     updateMutation.mutate({
@@ -289,6 +332,23 @@ export default function DeviationDetailPage() {
 
         {/* Status Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* AI Suggest button — visible when editable */}
+          {isEditable && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 border-gray-300 text-gray-700 hover:bg-gray-50"
+              onClick={handleAISuggest}
+              disabled={aiLoading}
+            >
+              {aiLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              AI Suggest RCA
+            </Button>
+          )}
           {deviation.status === "open" && (
             <Button
               size="sm"
@@ -420,6 +480,123 @@ export default function DeviationDetailPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* AI Suggestion Panel */}
+      {aiSuggestion && (
+        <Card className="border border-gray-300 shadow-sm bg-gray-50">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-gray-700" />
+                <CardTitle className="text-sm font-semibold text-gray-800">
+                  AI Root Cause Analysis
+                </CardTitle>
+                <span className="text-[10px] font-medium text-gray-500 border border-gray-300 rounded-full px-2 py-0.5">
+                  Review before applying
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setAiExpanded((v) => !v)}
+              >
+                {aiExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                )}
+              </Button>
+            </div>
+            {aiSuggestion.riskNote && (
+              <p className="text-xs text-gray-600 mt-1 pl-6">{aiSuggestion.riskNote}</p>
+            )}
+          </CardHeader>
+          {aiExpanded && (
+            <CardContent className="space-y-5">
+              {/* Root Causes */}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-2">Probable Root Causes</p>
+                <div className="space-y-2">
+                  {aiSuggestion.rootCauses.map((rc, i) => (
+                    <div key={i} className="flex gap-2.5 text-sm">
+                      <span
+                        className={`mt-0.5 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                          rc.likelihood === "high"
+                            ? "bg-gray-800 text-white"
+                            : rc.likelihood === "medium"
+                            ? "bg-gray-300 text-gray-800"
+                            : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {rc.likelihood}
+                      </span>
+                      <div>
+                        <p className="font-medium text-gray-800">{rc.cause}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{rc.rationale}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Investigation Questions */}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-2">
+                  Investigation Questions
+                </p>
+                <ul className="space-y-1">
+                  {aiSuggestion.investigationQuestions.map((q, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-gray-700">
+                      <span className="text-gray-400 shrink-0">{i + 1}.</span>
+                      {q}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {aiSuggestion.similarPatterns &&
+                aiSuggestion.similarPatterns !== "No patterns detected" && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700 mb-1">
+                        Historical Patterns
+                      </p>
+                      <p className="text-sm text-gray-600">{aiSuggestion.similarPatterns}</p>
+                    </div>
+                  </>
+                )}
+
+              <Separator />
+
+              {/* CAPA Templates */}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-2">
+                  Suggested CAPA Templates{" "}
+                  <span className="font-normal text-gray-400">(click to apply)</span>
+                </p>
+                <div className="space-y-2">
+                  {aiSuggestion.capaTemplates.map((capa, i) => (
+                    <div
+                      key={i}
+                      className="border border-gray-200 rounded-lg p-3 bg-white hover:border-gray-400 cursor-pointer transition-colors"
+                      onClick={() => applyAISuggestion(capa)}
+                    >
+                      <p className="text-xs font-medium text-gray-600 mb-0.5">Corrective</p>
+                      <p className="text-sm text-gray-800 mb-2">{capa.corrective}</p>
+                      <p className="text-xs font-medium text-gray-600 mb-0.5">Preventive</p>
+                      <p className="text-sm text-gray-800">{capa.preventive}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       {/* Investigation Section */}
       <Card className="border border-gray-200 shadow-sm">

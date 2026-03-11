@@ -65,6 +65,7 @@ export const ROUTES = {
   // Settings
   SETTINGS: "/app/ebmr/settings",
   SETTINGS_ORG: "/app/ebmr/settings/organization",
+  SETTINGS_ORGANIZATION: "/app/ebmr/settings/organization",
   SETTINGS_USERS: "/app/ebmr/settings/users",
   SETTINGS_ROLES: "/app/ebmr/settings/roles",
 

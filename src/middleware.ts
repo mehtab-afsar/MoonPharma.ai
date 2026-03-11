@@ -15,26 +15,26 @@ export default withAuth(
     const role = token.role as string
 
     if (pathname.startsWith("/admin") && role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url))
+      return NextResponse.redirect(new URL("/app/ebmr/dashboard", req.url))
     }
 
     if (pathname.startsWith("/platform") && role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url))
+      return NextResponse.redirect(new URL("/app/ebmr/dashboard", req.url))
     }
 
     if (pathname.startsWith("/ontology") && role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url))
+      return NextResponse.redirect(new URL("/app/ebmr/dashboard", req.url))
     }
 
-    if (pathname.startsWith("/settings") && role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url))
+    if (pathname.startsWith("/app/ebmr/settings") && role !== "admin") {
+      return NextResponse.redirect(new URL("/app/ebmr/dashboard", req.url))
     }
 
     if (
-      pathname.startsWith("/audit-trail") &&
+      pathname.startsWith("/app/ebmr/audit-trail") &&
       !["admin", "qa_head", "qa_reviewer"].includes(role)
     ) {
-      return NextResponse.redirect(new URL("/dashboard", req.url))
+      return NextResponse.redirect(new URL("/app/ebmr/dashboard", req.url))
     }
 
     return NextResponse.next()

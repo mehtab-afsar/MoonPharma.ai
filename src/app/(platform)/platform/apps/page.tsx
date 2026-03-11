@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { FlaskConical, ArrowRight } from "lucide-react"
+import { ROUTES } from "@/shared/constants/routes"
 
 export default function PlatformAppsPage() {
   return (
@@ -25,7 +26,7 @@ export default function PlatformAppsPage() {
             Manage master batch records, execute manufacturing batches, track deviations, and perform QA reviews.
           </p>
           <Link
-            href="/dashboard"
+            href={ROUTES.DASHBOARD}
             className="flex items-center justify-center gap-1.5 bg-black text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
           >
             Open eBMR

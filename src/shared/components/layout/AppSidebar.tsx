@@ -88,8 +88,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       <nav className={cn("flex-1 p-2 space-y-0.5 overflow-y-auto overflow-x-hidden", collapsed ? "px-2" : "p-3")}>
         {visibleItems.map((item) => {
           const isActive =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
+            item.href === ROUTES.DASHBOARD
+              ? pathname === ROUTES.DASHBOARD
               : pathname.startsWith(item.href)
 
           return (

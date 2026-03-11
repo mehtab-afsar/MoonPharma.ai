@@ -134,10 +134,18 @@ export async function completeReviewStage(params: {
 // SAVE AI SUMMARY
 // ============================================
 
-export async function saveAISummary(reviewId: string, aiSummary: string, orgId: string) {
+export async function saveAISummary(
+  reviewId: string,
+  aiSummary: string,
+  orgId: string,
+  aiFlaggedIssues?: object
+) {
   const review = await prisma.batchReview.update({
     where: { id: reviewId },
-    data: { aiReviewSummary: aiSummary },
+    data: {
+      aiReviewSummary: aiSummary,
+      ...(aiFlaggedIssues ? { aiFlaggedIssues } : {}),
+    },
   })
 
   await logAudit({
