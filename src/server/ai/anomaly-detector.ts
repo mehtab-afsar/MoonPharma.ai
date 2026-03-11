@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // Real-time parameter anomaly detection
 // Checks if a newly recorded parameter value is statistically unusual vs. historical norms
 // Even if within spec (min/max), flags values that deviate from the historical mean

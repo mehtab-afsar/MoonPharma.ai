@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // AI-powered MBR step authoring assistant
 // Given a plain-English description, generates a full MBR step with parameters and IPC checks
 

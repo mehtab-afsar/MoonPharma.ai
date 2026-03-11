@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
+import { useState } from "react"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -17,8 +18,7 @@ import {
   Bot,
   BarChart3,
   Settings,
-  ChevronLeft,
-  ChevronRight,
+  ArrowLeft, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
 
@@ -27,10 +27,11 @@ interface NavItem {
   href: string
   icon: React.ComponentType<{ className?: string }>
   roles?: string[]
+  exact?: boolean
 }
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: ROUTES.DASHBOARD, icon: LayoutDashboard },
+  { label: "Dashboard", href: ROUTES.DASHBOARD, icon: LayoutDashboard, exact: true },
   { label: "Batches", href: ROUTES.BATCHES, icon: Play },
   { label: "Master Batch Records", href: ROUTES.MBR, icon: FileText },
   { label: "Review Queue", href: ROUTES.REVIEW_QUEUE, icon: ClipboardCheck, roles: ["qa_reviewer", "qa_head", "admin"] },
@@ -44,14 +45,10 @@ const navItems: NavItem[] = [
   { label: "Settings", href: ROUTES.SETTINGS, icon: Settings, roles: ["admin"] },
 ]
 
-interface AppSidebarProps {
-  collapsed: boolean
-  onToggle: () => void
-}
-
-export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
+export function AppSidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
+  const [open, setOpen] = useState(false)
   const role = session?.user?.role
 
   const visibleItems = navItems.filter(
@@ -65,18 +62,23 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
     .join("") ?? "U"
 
   return (
-    <aside
+    <div
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
       className={cn(
-        "app-sidebar min-h-screen bg-black border-r border-white/10 flex flex-col relative",
-        collapsed ? "w-16" : "w-60"
+        "shrink-0 bg-black flex flex-col h-screen sticky top-0 overflow-hidden transition-all duration-200 ease-in-out",
+        open ? "w-60" : "w-14"
       )}
     >
       {/* Logo */}
-      <div className={cn("border-b border-white/10 flex items-center", collapsed ? "p-4 justify-center" : "p-5 gap-2.5")}>
+      <div className={cn(
+        "border-b border-white/10 flex items-center transition-all duration-200",
+        open ? "p-5 gap-2.5" : "p-0 py-5 justify-center"
+      )}>
         <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
           <FlaskConical className="w-3.5 h-3.5 text-black" />
         </div>
-        {!collapsed && (
+        {open && (
           <div className="overflow-hidden">
             <p className="font-semibold text-white text-sm tracking-tight whitespace-nowrap">MoonPharma</p>
             <p className="text-xs text-white/40 whitespace-nowrap">eBMR System</p>
@@ -85,47 +87,60 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className={cn("flex-1 p-2 space-y-0.5 overflow-y-auto overflow-x-hidden", collapsed ? "px-2" : "p-3")}>
+      <nav className={cn(
+        "flex-1 overflow-y-auto py-3 space-y-0.5 transition-all duration-200",
+        open ? "px-3" : "px-2"
+      )}>
         {visibleItems.map((item) => {
-          const isActive =
-            item.href === ROUTES.DASHBOARD
-              ? pathname === ROUTES.DASHBOARD
-              : pathname.startsWith(item.href)
+          const isActive = item.exact
+            ? pathname === item.href
+            : pathname.startsWith(item.href)
 
           return (
             <Link
               key={item.href}
               href={item.href}
-              title={collapsed ? item.label : undefined}
+              title={!open ? item.label : undefined}
               className={cn(
-                "flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors duration-150",
-                collapsed ? "px-2 py-2.5 justify-center" : "px-3 py-2",
+                "flex items-center rounded-lg text-sm font-medium transition-colors duration-150",
+                open ? "gap-2.5 px-3 py-2" : "justify-center px-2 py-2.5",
                 isActive
                   ? "bg-white text-black"
                   : "text-white/50 hover:text-white hover:bg-white/[0.08]"
               )}
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && (
-                <span className="sidebar-label truncate">{item.label}</span>
-              )}
+              {open && <span className="truncate whitespace-nowrap">{item.label}</span>}
             </Link>
           )
         })}
       </nav>
 
+      {/* Back to Platform */}
+      <div className={cn("px-2 pb-2", open && "px-3")}>
+        <Link
+          href="/platform"
+          title={!open ? "Platform" : undefined}
+          className={cn(
+            "flex items-center rounded-lg text-sm font-medium transition-colors duration-150 text-white/30 hover:text-white hover:bg-white/[0.08]",
+            open ? "gap-2.5 px-3 py-2" : "justify-center px-2 py-2.5"
+          )}
+        >
+          <ArrowLeft className="w-4 h-4 flex-shrink-0" />
+          {open && <span className="truncate whitespace-nowrap">Back to Platform</span>}
+        </Link>
+      </div>
+
       {/* User Info */}
       {session?.user && (
-        <div className={cn("border-t border-white/10", collapsed ? "p-2" : "p-3")}>
-          <div className={cn("flex items-center rounded-lg px-2 py-1.5", collapsed ? "justify-center" : "gap-2.5")}>
+        <div className={cn("border-t border-white/10", open ? "p-3" : "p-2")}>
+          <div className={cn("flex items-center rounded-lg px-2 py-1.5", open ? "gap-2.5" : "justify-center")}>
             <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
               <span className="text-xs font-semibold text-white">{initials}</span>
             </div>
-            {!collapsed && (
+            {open && (
               <div className="min-w-0 flex-1 overflow-hidden">
-                <p className="text-xs font-medium text-white truncate">
-                  {session.user.fullName}
-                </p>
+                <p className="text-xs font-medium text-white truncate">{session.user.fullName}</p>
                 <p className="text-xs text-white/40 capitalize truncate">
                   {session.user.role?.replace(/_/g, " ")}
                 </p>
@@ -134,18 +149,6 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           </div>
         </div>
       )}
-
-      {/* Collapse toggle */}
-      <button
-        onClick={onToggle}
-        className="absolute -right-3 top-[72px] z-10 w-6 h-6 rounded-full bg-black border border-white/20 flex items-center justify-center hover:bg-white hover:border-black transition-colors duration-150 group"
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        {collapsed
-          ? <ChevronRight className="w-3 h-3 text-white group-hover:text-black" />
-          : <ChevronLeft className="w-3 h-3 text-white group-hover:text-black" />
-        }
-      </button>
-    </aside>
+    </div>
   )
 }

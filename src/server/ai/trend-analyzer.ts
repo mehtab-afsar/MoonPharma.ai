@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // AI-powered trend analysis for OOS events, yield performance, and equipment risk
 
 import { callOpenRouter, MODELS } from "./openrouter-client"
