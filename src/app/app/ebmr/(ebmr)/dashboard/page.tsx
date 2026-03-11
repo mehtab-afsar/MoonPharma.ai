@@ -7,27 +7,8 @@ import { BatchStatus, DeviationStatus } from "@/generated/prisma"
 import { DashboardMetrics } from "@/features/dashboard/components/DashboardMetrics"
 import { QuickActions } from "@/features/dashboard/components/QuickActions"
 import { RecentBatchesTable } from "@/features/dashboard/components/RecentBatchesTable"
-import { OnboardingChecklist } from "@/features/dashboard/components/OnboardingChecklist"
 import { ArrowRight } from "lucide-react"
 import { ROUTES } from "@/shared/constants/routes"
-
-async function getOnboardingStatus(orgId: string) {
-  const [productCount, materialCount, equipmentCount, mbrCount, userCount] = await Promise.all([
-    prisma.product.count({ where: { orgId } }),
-    prisma.material.count({ where: { orgId } }),
-    prisma.equipment.count({ where: { orgId } }),
-    prisma.masterBatchRecord.count({ where: { orgId } }),
-    prisma.user.count({ where: { orgId } }),
-  ])
-  return {
-    hasProduct: productCount > 0,
-    hasMaterial: materialCount > 0,
-    hasEquipment: equipmentCount > 0,
-    hasMBR: mbrCount > 0,
-    hasTeam: userCount > 1, // More than just the admin
-    isComplete: productCount > 0 && materialCount > 0 && equipmentCount > 0 && mbrCount > 0,
-  }
-}
 
 async function getDashboardStats(orgId: string) {
   const now = new Date()
@@ -75,9 +56,8 @@ export default async function DashboardPage() {
   const userName = session?.user?.fullName?.split(" ")[0] ?? "User"
   const orgId = session?.user?.orgId ?? ""
 
-  const [stats, onboarding] = await Promise.all([
+  const [stats] = await Promise.all([
     orgId ? getDashboardStats(orgId).catch(() => EMPTY_STATS) : Promise.resolve(EMPTY_STATS),
-    orgId ? getOnboardingStatus(orgId).catch(() => null) : Promise.resolve(null),
   ])
 
   return (
@@ -91,17 +71,6 @@ export default async function DashboardPage() {
           Here&apos;s what&apos;s happening across your manufacturing floor.
         </p>
       </div>
-
-      {/* Onboarding checklist (only shown if setup is incomplete) */}
-      {onboarding && !onboarding.isComplete && (
-        <OnboardingChecklist
-          hasProduct={onboarding.hasProduct}
-          hasMaterial={onboarding.hasMaterial}
-          hasEquipment={onboarding.hasEquipment}
-          hasMBR={onboarding.hasMBR}
-          hasTeam={onboarding.hasTeam}
-        />
-      )}
 
       {/* Count-up stat cards */}
       <DashboardMetrics
